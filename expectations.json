@@ -1,0 +1,161 @@
+{
+	"test_cases": [
+		{
+			"id": "contained_inputs",
+			"description": "Inputs INSIDE request-header go to that header",
+			"form_state": {
+				"page": "5",
+				"per": "50",
+				"view": "list",
+				"wait": "",
+				"first": "aaa",
+				"second": "bbb",
+				"status": "",
+				"q": ""
+			},
+			"expected_request": {
+				"headers": {
+					"Range": "pages=5@50"
+				},
+				"query_must_not_contain": ["page=", "per="]
+			}
+		},
+		{
+			"id": "for_attribute_linking",
+			"description": "Inputs with for= attribute link to request-header by id",
+			"form_state": {
+				"page": "1",
+				"per": "25",
+				"view": "kanban",
+				"wait": "",
+				"first": "aaa",
+				"second": "bbb",
+				"status": "",
+				"q": ""
+			},
+			"expected_request": {
+				"headers": {
+					"Prefer": "view=kanban",
+					"Range": "pages=1@25"
+				},
+				"query_must_not_contain": ["view="]
+			}
+		},
+		{
+			"id": "append_semantics_prefer",
+			"description": "Multiple Prefer headers comma-join (RFC 9110 append)",
+			"form_state": {
+				"page": "1",
+				"per": "25",
+				"view": "cards",
+				"wait": "30",
+				"first": "aaa",
+				"second": "bbb",
+				"status": "",
+				"q": ""
+			},
+			"expected_request": {
+				"headers": {
+					"Prefer": "view=cards, wait=30",
+					"Range": "pages=1@25"
+				}
+			}
+		},
+		{
+			"id": "append_skips_empty",
+			"description": "Empty values don't appear in comma-joined headers",
+			"form_state": {
+				"page": "2",
+				"per": "10",
+				"view": "list",
+				"wait": "",
+				"first": "aaa",
+				"second": "bbb",
+				"status": "",
+				"q": ""
+			},
+			"expected_request": {
+				"headers": {
+					"Prefer": "view=list",
+					"Range": "pages=2@10"
+				}
+			}
+		},
+		{
+			"id": "replace_semantics",
+			"description": "Non-append headers use last value (replace semantics)",
+			"form_state": {
+				"page": "1",
+				"per": "25",
+				"view": "list",
+				"wait": "",
+				"first": "aaa",
+				"second": "bbb",
+				"status": "",
+				"q": ""
+			},
+			"expected_request": {
+				"headers": {
+					"X-Test-Replace": "second=bbb"
+				}
+			}
+		},
+		{
+			"id": "filters_to_query",
+			"description": "Non-header inputs go to query string",
+			"form_state": {
+				"page": "1",
+				"per": "25",
+				"view": "list",
+				"wait": "",
+				"first": "aaa",
+				"second": "bbb",
+				"status": "active",
+				"q": "test"
+			},
+			"expected_request": {
+				"headers": {
+					"Prefer": "view=list",
+					"Range": "pages=1@25"
+				},
+				"query_must_contain": ["status=active", "q=test"],
+				"query_must_not_contain": ["page=", "per=", "view=", "wait=", "first=", "second="]
+			}
+		},
+		{
+			"id": "mixed_all_features",
+			"description": "Full integration: contained, for=, append, replace, query",
+			"form_state": {
+				"page": "3",
+				"per": "100",
+				"view": "table-rows",
+				"wait": "60",
+				"first": "xxx",
+				"second": "yyy",
+				"status": "inactive",
+				"q": "acme"
+			},
+			"expected_request": {
+				"headers": {
+					"Range": "pages=3@100",
+					"Prefer": "view=table-rows, wait=60",
+					"X-Test-Replace": "second=yyy"
+				},
+				"query_must_contain": ["status=inactive", "q=acme"],
+				"query_must_not_contain": ["page=", "per=", "view=", "wait=", "first=", "second="]
+			}
+		}
+	],
+	"header_format_spec": {
+		"Prefer": {
+			"pattern": "^view=[a-z-]+(, wait=\\d+)?$",
+			"append_semantics": true
+		},
+		"Range": {
+			"pattern": "^pages=\\d+@\\d+$"
+		},
+		"X-Test-Replace": {
+			"replace_semantics": true
+		}
+	}
+}

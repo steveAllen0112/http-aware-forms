@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>HTTP-Aware Form Test (Standalone - No HTMX)</title>
+	<style>
+		body {
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			min-height: 100vh;
+			font-family: system-ui;
+			background: #f5f5f5;
+		}
+		.test-harness {
+			background: white;
+			padding: 2rem;
+			border-radius: 8px;
+			box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+			width: 500px;
+		}
+		fieldset { margin: 1rem 0; padding: 1rem; }
+		legend { font-weight: bold; }
+		label { display: block; margin: 0.5rem 0; }
+		input[type="number"], select { padding: 0.5rem; width: 100%; box-sizing: border-box; }
+		button { padding: 1rem; width: 100%; margin-top: 1rem; cursor: pointer; }
+		#response {
+			margin-top: 1rem;
+			padding: 1rem;
+			background: #eee;
+			font-family: monospace;
+			white-space: pre-wrap;
+			min-height: 100px;
+		}
+		h2 { margin-top: 0; }
+	</style>
+</head>
+<body>
+	<div class="test-harness">
+		<h2>HTTP-Aware Form Test (Standalone)</h2>
+
+		<form is="http-aware" id="test-form" class="list-controls"
+				action="http://localhost:9999/companies"
+				method="get">
+
+			<!-- Pagination: inputs INSIDE request-header fieldset -->
+			<fieldset is="request-header" header="Range" value="pages={page}@{per}">
+				<legend>Pagination (contained)</legend>
+				<label>
+					Page: <input type="number" name="page" value="1" min="1">
+				</label>
+				<label>
+					Per Page:
+					<select name="per">
+						<option value="10">10</option>
+						<option value="25" selected>25</option>
+						<option value="50">50</option>
+						<option value="100">100</option>
+					</select>
+				</label>
+			</fieldset>
+
+			<!-- View: inputs linked via for= attribute (not nested) -->
+			<fieldset is="request-header" id="view-pref" header="Prefer" value="view={view}">
+				<legend>View (linked via for=)</legend>
+				<label><input type="radio" name="view" value="list" for="view-pref" checked> List</label>
+				<label><input type="radio" name="view" value="cards" for="view-pref"> Cards</label>
+				<label><input type="radio" name="view" value="kanban" for="view-pref"> Kanban</label>
+				<label><input type="radio" name="view" value="table-rows" for="view-pref"> Table Rows</label>
+			</fieldset>
+
+			<!-- RFC 9110: Multiple Prefer headers should comma-join (append semantics) -->
+			<fieldset is="request-header" id="wait-pref" header="Prefer" value="wait={wait}">
+				<legend>Wait preference (tests append semantics)</legend>
+				<label>
+					Wait timeout:
+					<select name="wait">
+						<option value="">None</option>
+						<option value="10">10s</option>
+						<option value="30">30s</option>
+						<option value="60">60s</option>
+					</select>
+				</label>
+			</fieldset>
+
+			<!-- Non-combinable header: should replace (last wins) -->
+			<fieldset is="request-header" id="auth1" header="X-Test-Replace" value="first={first}">
+				<legend>Replace semantics test (first)</legend>
+				<label>First: <input type="text" name="first" value="aaa"></label>
+			</fieldset>
+
+			<fieldset is="request-header" id="auth2" header="X-Test-Replace" value="second={second}">
+				<legend>Replace semantics test (second - wins)</legend>
+				<label>Second: <input type="text" name="second" value="bbb"></label>
+			</fieldset>
+
+			<fieldset>
+				<legend>Filters (should go to query string)</legend>
+				<label>
+					Status:
+					<select name="status">
+						<option value="">All</option>
+						<option value="active">Active</option>
+						<option value="inactive">Inactive</option>
+					</select>
+				</label>
+				<label>
+					Search: <input type="text" name="q" placeholder="Search...">
+				</label>
+			</fieldset>
+
+			<button type="submit">Submit</button>
+		</form>
+
+		<div id="response">Response will appear here...</div>
+	</div>
+
+	<script src="http-aware.js"></script>
+	<script>
+		// For testing: intercept the submit, use preparedRequest, show response
+		document.getElementById('test-form').addEventListener('submit', async function(e) {
+			e.preventDefault();
+
+			const form = e.target;
+			const request = form.preparedRequest;
+
+			if (!request) {
+				document.getElementById('response').textContent = 'ERROR: No preparedRequest available';
+				return;
+			}
+
+			try {
+				const response = await fetch(request);
+				const text = await response.text();
+				document.getElementById('response').innerHTML = text;
+			} catch (err) {
+				document.getElementById('response').textContent = 'ERROR: ' + err.message;
+			}
+		});
+	</script>
+</body>
+</html>

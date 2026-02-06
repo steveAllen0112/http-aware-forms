@@ -164,20 +164,6 @@ document.querySelector('form').addEventListener('submit', async (e) => {
 });
 ```
 
-For example, to use with [HTMX](https://htmx.org), cancel HTMX's request and use the `preparedRequest` directly:
-
-```javascript
-document.body.addEventListener('htmx:beforeRequest', (e) => {
-  const form = e.detail.elt.closest('form[is="http-aware"]');
-  if (!form?.preparedRequest) return;
-
-  e.preventDefault();
-  fetch(form.preparedRequest)
-    .then(r => r.text())
-    .then(html => htmx.swap(e.detail.target, html, e.detail.swapSpec));
-});
-```
-
 ## Browser Support
 
 Works in all modern browsers that support [customized built-in elements](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#types_of_custom_element).

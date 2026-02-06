@@ -7,7 +7,7 @@ Native HTML forms only support GET and POST, with no access to HTTP headers. Thi
 ## Installation
 
 ```html
-<script src="https://raw.githubusercontent.com/avnc/http-aware-forms/v1.0.0/http-aware.js"></script>
+<script src="https://raw.githubusercontent.com/steveAllen0112/http-aware-forms/main/http-aware.js"></script>
 ```
 
 Or download `http-aware.js` and include it locally.
@@ -25,33 +25,35 @@ That's a DELETE request. Native forms can't do this.
 
 ## Declaring Headers
 
-Use `<request-header>` to declare HTTP headers with interpolated values:
+Use `<fieldset is="request-header">` to declare HTTP headers with interpolated values:
 
 ```html
 <form is="http-aware" action="/companies" method="get">
-  <request-header name="Range" value="pages={page}@{per}">
+  <fieldset is="request-header" header="Range" value="pages={page}@{per}">
     <input name="page" type="number" value="1">
     <select name="per">
       <option>10</option>
       <option selected>25</option>
       <option>50</option>
     </select>
-  </request-header>
+  </fieldset>
   <button type="submit">Load</button>
 </form>
 ```
 
 Submitting sends: `Range: pages=1@25`
 
-Inputs inside `<request-header>` go to that header. Inputs outside go to the query string (GET/HEAD/DELETE) or request body (POST/PUT/PATCH).
+Inputs inside the fieldset go to that header. Inputs outside go to the query string (GET/HEAD/DELETE) or request body (POST/PUT/PATCH).
 
 ## Linking Inputs with `for=`
 
-Inputs outside `<request-header>` can link to it using `for=`:
+Inputs outside a fieldset can link to it using `for=`:
 
 ```html
 <form is="http-aware" action="/items" method="get">
-  <request-header id="view-pref" name="Prefer" value="view={view}"></request-header>
+  <fieldset is="request-header" id="view-pref" header="Prefer" value="view={view}">
+    <legend>View</legend>
+  </fieldset>
 
   <label><input type="radio" name="view" value="list" for="view-pref" checked> List</label>
   <label><input type="radio" name="view" value="cards" for="view-pref"> Cards</label>
@@ -67,39 +69,47 @@ Submitting sends: `Prefer: view=list`
 Values are interpolated as strings by default. Use format specifiers for control:
 
 ```html
-<request-header name="X-Quality" value="{quality,decimal(2)}">
+<fieldset is="request-header" header="X-Quality" value="{quality,decimal(2)}">
   <input name="quality" type="number" step="0.01" value="0.95">
-</request-header>
+</fieldset>
 <!-- Sends: X-Quality: 0.95 -->
 ```
 
-Available formatters:
+Formatters are pluggable via `HTTPAwareForm.formatters`. The core library ships with none - add what you need:
+
+```javascript
+HTTPAwareForm.formatters.myFormat = (value, arg1, arg2) => /* transformed value */;
+```
+
+Include `http-aware-formatters.js` for a starter set:
+
 - `decimal(n)` - Fixed decimal places
 - `pad(width, char)` - Pad string (default: zeros)
 - `upper` / `lower` - Case conversion
 - `iso` - ISO 8601 datetime
 - `rfc7231` - HTTP-date format
 
+These are intentionally minimal. Roll your own for anything beyond the basics.
+
 ## Multiple Headers (RFC 9110)
 
 Headers like `Prefer`, `Accept`, and `Cache-Control` are comma-joined per RFC 9110:
 
 ```html
-<request-header name="Prefer" value="view={view}"></request-header>
-<request-header name="Prefer" value="wait={timeout}"></request-header>
+<fieldset is="request-header" header="Prefer" value="view={view}">...</fieldset>
+<fieldset is="request-header" header="Prefer" value="wait={timeout}">...</fieldset>
 <!-- Sends: Prefer: view=list, wait=30 -->
 ```
 
 Other headers use last-value-wins (replace semantics).
 
-## Structured Header Parameters
-
-Target header parameters with bracket syntax:
+For structured headers with parameters, use template interpolation:
 
 ```html
-<request-header name="Content-Disposition" value="attachment"></request-header>
-<request-header name="Content-Disposition[filename]" value="{filename}"></request-header>
-<!-- Sends: Content-Disposition: attachment; filename="report.pdf" -->
+<fieldset is="request-header" header="Content-Disposition" value="attachment; filename={filename}">
+  <input name="filename" value="report.pdf">
+</fieldset>
+<!-- Sends: Content-Disposition: attachment; filename=report.pdf -->
 ```
 
 ## HTTP Methods
@@ -155,18 +165,6 @@ document.querySelector('form').addEventListener('submit', async (e) => {
 Works in all modern browsers that support [customized built-in elements](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#types_of_custom_element).
 
 **Safari note:** Safari doesn't support `is="..."` for customized built-ins. Use the [Custom Elements Polyfill](https://github.com/nicknisi/custom-elements-polyfill) or wait for Safari to catch up.
-
-## Important
-
-Custom elements require explicit closing tags:
-
-```html
-<!-- Wrong -->
-<request-header name="X-Foo" value="{bar}"/>
-
-<!-- Right -->
-<request-header name="X-Foo" value="{bar}"></request-header>
-```
 
 ## License
 

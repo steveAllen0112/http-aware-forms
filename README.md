@@ -164,14 +164,17 @@ document.querySelector('form').addEventListener('submit', async (e) => {
 });
 ```
 
-For example, if you want to use with [HTMX](https://htmx.org), intercept the `htmx:configRequest` event and inject headers from the prepared request:
+For example, to use with [HTMX](https://htmx.org), cancel HTMX's request and use the `preparedRequest` directly:
 
 ```javascript
-document.body.addEventListener('htmx:configRequest', (e) => {
+document.body.addEventListener('htmx:beforeRequest', (e) => {
   const form = e.detail.elt.closest('form[is="http-aware"]');
-  if (form?.preparedRequest) {
-    form.preparedRequest.headers.forEach((v, k) => e.detail.headers[k] = v);
-  }
+  if (!form?.preparedRequest) return;
+
+  e.preventDefault();
+  fetch(form.preparedRequest)
+    .then(r => r.text())
+    .then(html => htmx.swap(e.detail.target, html, e.detail.swapSpec));
 });
 ```
 

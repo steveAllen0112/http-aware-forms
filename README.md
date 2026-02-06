@@ -164,6 +164,15 @@ document.querySelector('form').addEventListener('submit', async (e) => {
 });
 ```
 
+For example, if you want to use with HTMX, intercept the `htmx:configRequest` event and inject the headers:
+
+```javascript
+document.body.addEventListener('htmx:configRequest', (e) => {
+  const form = e.detail.elt.closest('form[is="http-aware"]');
+  if (form) Object.assign(e.detail.headers, form.collectHeaders());
+});
+```
+
 ## Browser Support
 
 Works in all modern browsers that support [customized built-in elements](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#types_of_custom_element).

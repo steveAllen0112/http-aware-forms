@@ -93,7 +93,7 @@ Include `http-aware-formatters.js` for a starter set:
 - `iso` - ISO 8601 datetime
 - `rfc7231` - HTTP-date format
 
-These are intentionally minimal. Roll your own for anything beyond the basics.
+As proof-of-concepts, these are intentionally minimal. Roll your own for anything beyond the basics.
 
 ## Multiple Headers (RFC 9110)
 

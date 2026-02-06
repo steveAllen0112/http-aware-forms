@@ -164,7 +164,7 @@ document.querySelector('form').addEventListener('submit', async (e) => {
 });
 ```
 
-For example, if you want to use with HTMX, intercept the `htmx:configRequest` event and inject the headers:
+For example, if you want to use with [HTMX](https://htmx.org), intercept the `htmx:configRequest` event and inject the headers:
 
 ```javascript
 document.body.addEventListener('htmx:configRequest', (e) => {

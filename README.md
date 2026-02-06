@@ -7,10 +7,14 @@ Native HTML forms only support GET and POST, with no access to HTTP headers. Thi
 ## Installation
 
 ```html
-<script src="https://raw.githubusercontent.com/steveAllen0112/http-aware-forms/main/http-aware.js"></script>
+<script src="https://raw.githubusercontent.com/steveAllen0112/http-aware-forms/main/dist/http-aware.min.js"></script>
 ```
 
-Or download `http-aware.js` and include it locally.
+Or use the unminified source for development:
+
+```html
+<script src="https://raw.githubusercontent.com/steveAllen0112/http-aware-forms/main/http-aware.js"></script>
+```
 
 ## Quick Example
 

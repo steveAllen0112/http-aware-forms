@@ -168,4 +168,4 @@ Works in all modern browsers that support [customized built-in elements](https:/
 
 ## License
 
-MIT - Avance Enterprise Solutions, Inc.
+[MIT](https://opensource.org/licenses/MIT) - [Avance Enterprise Solutions, Inc.](https://avnc.net)

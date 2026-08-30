@@ -33,7 +33,15 @@ async function runTests() {
 	const results = [];
 
 	try {
-		const browser = await chromium.launch({ headless: true });
+		// Prefer Playwright's own browser; fall back to a system Chrome/Chromium so
+		// a fresh clone can run the suite without `npx playwright install` first.
+		let browser;
+		try {
+			browser = await chromium.launch({ headless: true });
+		} catch {
+			console.log('Bundled browser missing — falling back to system Chrome.');
+			browser = await chromium.launch({ headless: true, channel: 'chrome' });
+		}
 		const page = await browser.newPage();
 
 		for (const tc of spec.test_cases) {

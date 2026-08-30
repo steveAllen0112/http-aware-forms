@@ -17,7 +17,10 @@
 				"headers": {
 					"Range": "pages=5@50"
 				},
-				"query_must_not_contain": ["page=", "per="]
+				"query_must_not_contain": [
+					"page=",
+					"per="
+				]
 			}
 		},
 		{
@@ -38,7 +41,9 @@
 					"Prefer": "view=kanban",
 					"Range": "pages=1@25"
 				},
-				"query_must_not_contain": ["view="]
+				"query_must_not_contain": [
+					"view="
+				]
 			}
 		},
 		{
@@ -118,8 +123,18 @@
 					"Prefer": "view=list",
 					"Range": "pages=1@25"
 				},
-				"query_must_contain": ["status=active", "q=test"],
-				"query_must_not_contain": ["page=", "per=", "view=", "wait=", "first=", "second="]
+				"query_must_contain": [
+					"status=active",
+					"q=test"
+				],
+				"query_must_not_contain": [
+					"page=",
+					"per=",
+					"view=",
+					"wait=",
+					"first=",
+					"second="
+				]
 			}
 		},
 		{
@@ -141,8 +156,51 @@
 					"Prefer": "view=table-rows, wait=60",
 					"X-Test-Replace": "second=yyy"
 				},
-				"query_must_contain": ["status=inactive", "q=acme"],
-				"query_must_not_contain": ["page=", "per=", "view=", "wait=", "first=", "second="]
+				"query_must_contain": [
+					"status=inactive",
+					"q=acme"
+				],
+				"query_must_not_contain": [
+					"page=",
+					"per=",
+					"view=",
+					"wait=",
+					"first=",
+					"second="
+				]
+			}
+		},
+		{
+			"id": "namespace_prefixes_contained_fields",
+			"description": "fieldset[is=name-space] prefixes its fields as name[field]",
+			"form_state": {
+				"rate": "0.055",
+				"term_months": "36"
+			},
+			"expected_request": {
+				"query_must_contain": [
+					"lease%5Brate%5D=0.055",
+					"lease%5Bterm_months%5D=36"
+				],
+				"query_must_not_contain": [
+					"rate=0.055",
+					"term_months=36"
+				]
+			}
+		},
+		{
+			"id": "unmarked_named_fieldset_stays_flat",
+			"description": "A named fieldset WITHOUT the marker is untouched \u2014 the guard that lets this ship without breaking existing forms",
+			"form_state": {
+				"cost": "999"
+			},
+			"expected_request": {
+				"query_must_contain": [
+					"cost=999"
+				],
+				"query_must_not_contain": [
+					"pricing%5Bcost%5D="
+				]
 			}
 		}
 	],

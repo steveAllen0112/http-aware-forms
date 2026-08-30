@@ -178,6 +178,17 @@
 			<label>Second <input type="text" name="second" value="bbb"></label>
 		</fieldset>
 
+		<fieldset is="name-space" name="lease">
+			<legend>Namespaced <code>→ lease[…]</code></legend>
+			<label>Rate <input type="text" name="rate" value="0.041"></label>
+			<label>Term (months) <input type="number" name="term_months" value="60"></label>
+		</fieldset>
+
+		<fieldset name="pricing">
+			<legend>Named but <em>unmarked</em> <code>— stays flat</code></legend>
+			<label>Cost <input type="text" name="cost" value="1200"></label>
+		</fieldset>
+
 		<fieldset>
 			<legend>Filters <code>→ query string</code></legend>
 			<label>Status

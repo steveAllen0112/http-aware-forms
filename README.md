@@ -1,8 +1,12 @@
 # HTTP-Aware Forms
 
-Expand HTML forms' HTTP methods and header declarations.
+HTML forms that speak the whole of HTTP.
 
-Native HTML forms only support GET and POST, with no access to HTTP headers. This library extends `<form>` to support PUT, PATCH, DELETE, HEAD, and lets you declare headers directly in markup.
+A native `<form>` knows two methods and no headers, submits its entire contents every time, and can only replace the whole page with the reply. This library extends `<form>` so that PUT, PATCH, DELETE and HEAD work, request headers are declared in markup, PATCH bodies carry only what the user changed, fields can be namespaced by the fieldset that contains them, and the response lands where you say instead of navigating.
+
+All of it is declared in attributes. There is no configuration, no build step and no framework — the demo page in this repository has no JavaScript on it beyond the one `<script>` that loads the library.
+
+**New in 2.0:** [namespaced fieldsets](#namespaced-fieldsets), [dirty-only PATCH bodies](#dirty-only-patch-bodies), [targeting the response](#targeting-the-response) with seven swap modes and out-of-band updates, and [`autosubmit`](#autosubmit-and-debounce). Everything from 1.0 still works unchanged.
 
 ## Installation
 
@@ -127,7 +131,83 @@ For structured headers with parameters, use template interpolation:
 | PUT | Request body |
 | PATCH | Request body |
 
-All methods navigate to the response, just like native forms.
+Without a `target`, every method navigates to the response, just as a native form does. With one, the reply is swapped into the page instead — see [Targeting the Response](#targeting-the-response).
+
+## Namespaced Fieldsets
+
+A `fieldset` marked `is="name-space"` prefixes the fields it contains:
+
+```html
+<fieldset is="name-space" name="lease">
+  <input name="rate" value="0.041">
+  <input name="term_months" value="60">
+</fieldset>
+<!-- Sends: lease[rate]=0.041&lease[term_months]=60 -->
+```
+
+Nesting composes outward-in, so a `name-space` inside a `name-space` gives `outer[inner][field]`.
+
+**Why this exists.** The DOM already models the grouping — `fieldset` is a listed element, and `HTMLFieldSetElement` has its own `.elements` collection, so two controls named `cost` in different fieldsets are distinguishable there. Submission throws that away and emits `cost=1&cost=2`. This closes the gap, opt-in.
+
+Two things are deliberate. **An unmarked fieldset is untouched**, named or not — `name` on a fieldset is inert natively and applications already use it for sectioning, so a rule that namespaced every named fieldset would silently rename fields in forms written before the feature existed. And **the submitter keeps its own name**, because a submit button's name is the action being taken rather than a field of the group it happens to sit in.
+
+The marker is hyphenated because it must be: a custom element name is required to contain a hyphen, for customized built-ins exactly as for autonomous ones, so `is="namespace"` cannot be registered at all.
+
+## Dirty-Only PATCH Bodies
+
+RFC 5789 says a PATCH body describes a delta, not the whole resource. Set `method="patch"` and that is what gets sent — every control whose value still matches its server-rendered default is dropped:
+
+```html
+<form is="http-aware" method="patch" action="/companies/42">
+  <input name="name"  value="Acme">      <!-- untouched: not sent -->
+  <input name="phone" value="555-0100">  <!-- edited:    sent -->
+  <button type="submit" name="intent" value="save">Save</button>
+</form>
+```
+
+The browser tracks the default natively through `defaultValue`, `defaultChecked` and `defaultSelected`, so there is no shadow copy to keep in step: after a successful PATCH the swapped-in markup carries new defaults and dirtiness resets by itself.
+
+The submitter's own name and value are always sent, dirty or not — it states the intent.
+
+## Targeting the Response
+
+`target="<selector>@<swap>"` puts the reply somewhere instead of navigating:
+
+```html
+<form is="http-aware" method="get" action="/search" target="#results">
+<form is="http-aware" method="patch" action="/row/7" target="#row-7@outerHTML">
+<form is="http-aware" method="post" action="/log" target="#feed@afterbegin">
+```
+
+| Swap | Effect |
+|------|--------|
+| `innerHTML` | Replace the target's contents (default) |
+| `outerHTML` | Replace the target itself |
+| `morph` | Reconcile in place, preserving focus, selection, scroll and in-flight edits |
+| `beforeend` / `afterbegin` | Append or prepend |
+| `delete` | Remove the target |
+| `none` | Do nothing with the body |
+
+`morph` is worth reaching for whenever the response contains the form that sent it: an `outerHTML` swap of a live panel destroys focus and any edit the user has begun, and a morph does not.
+
+Elements in the response carrying `hx-swap-oob` or `data-swap` are applied to their own targets by id, so one response can update several places at once.
+
+**Errors are not swapped.** A response that is not `ok` and is not HTML is surfaced as an `http-error` event and a toast rather than written into the target — swapping a JSON error body as `outerHTML` deletes the very panel it was reporting about.
+
+## autosubmit and debounce
+
+`autosubmit` names the events that submit the form, and `debounce` sets a delay in milliseconds:
+
+```html
+<!-- Commit-point saves: fires on blur or Enter, not on every keystroke -->
+<form is="http-aware" method="patch" action="/prefs" autosubmit="change">
+
+<!-- Live search, one request 300ms after typing stops -->
+<form is="http-aware" method="get" action="/search" target="#results"
+      autosubmit="input" debounce="300">
+```
+
+A button may override the delay for its own submission with `formdebounce`.
 
 ## Button Overrides (form* Attributes)
 
@@ -151,9 +231,11 @@ Submit buttons can override form attributes, just like native forms:
 | `formnovalidate` | Skip validation for this button |
 | `formtarget` | Where to display response (`_self`, `_blank`, etc.) |
 
-## Intercepting Submissions
+## Events and Manual Handling
 
-The form fires a standard `submit` event. Intercept it to handle the request yourself:
+The form dispatches `http-aware-submitted` when a request goes out, and `http-error` when a response comes back that is not `ok` and not HTML. Both bubble.
+
+It also fires a standard `submit` event, so a request can still be taken over entirely — though as of 2.0 this is rarely needed, since the library issues the request and places the response itself:
 
 ```javascript
 document.querySelector('form').addEventListener('submit', async (e) => {

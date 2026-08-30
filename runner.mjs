@@ -91,6 +91,20 @@ async function runTests() {
 				await page.fill('input[name="q"]', fs.q);
 			}
 
+			// Any field the block above does not know about: set it generically,
+			// so a new test case can introduce new controls without editing the
+			// runner. The known fields keep their explicit defaults above,
+			// because existing cases depend on a missing key meaning "default".
+			const known = ['page', 'per', 'view', 'wait', 'first', 'second', 'status', 'q'];
+			for (const [name, value] of Object.entries(fs)) {
+				if (known.includes(name)) continue;
+				const sel = `[name="${name}"]`;
+				const tag = await page.$eval(sel, (el) => el.tagName).catch(() => null);
+				if (tag === 'SELECT') await page.selectOption(sel, value);
+				else if (tag) await page.fill(sel, value);
+				else console.log(`  [warn] no control named ${name}`);
+			}
+
 			// Submit
 			captured = {};
 			await page.click('button[type="submit"]');

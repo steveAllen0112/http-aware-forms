@@ -246,6 +246,30 @@ document.querySelector('form').addEventListener('submit', async (e) => {
 });
 ```
 
+## Using it alongside htmx
+
+The core knows nothing about any other library. If a page runs htmx too — usually because one is being migrated to the other — load the optional interop file after it:
+
+```html
+<script src="http-aware.js"></script>
+<script src="http-aware-htmx.js"></script>
+```
+
+It teaches http-aware to recognise `hx-swap-oob` as an out-of-band marker, to honour `HX-Retarget`, `HX-Reswap` and `HX-Push-Url`, to send `HX-Request: true` on partial requests, and to run `htmx.process` over freshly-swapped markup so `hx-*` inside it goes live.
+
+## Extending it
+
+Four statics are the whole extension surface, and the interop file above is the worked example:
+
+| Static | Purpose |
+|--------|---------|
+| `formatters` | Named value formatters for header templates |
+| `requestHooks` | `(headers, form) => void`, called before each request goes out |
+| `oobAttributes` | Attributes marking an element in a response as out-of-band |
+| `retargetHeaders` / `reswapHeaders` | Response headers by which a server may redirect a swap |
+
+Anything that must run over swapped-in markup listens for `http-aware:swapped`, whose detail carries `{ target, swapRoot, oobTargets, response }`.
+
 ## Browser Support
 
 Works in all modern browsers that support [customized built-in elements](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#types_of_custom_element).

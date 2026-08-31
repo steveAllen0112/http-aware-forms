@@ -88,6 +88,37 @@ customElements.define('name-space', NameSpace, { extends: 'fieldset' });
 class HTTPAwareForm extends HTMLFormElement {
 	static formatters = {};
 
+	/**
+	 * EXTENSION POINTS. This library knows nothing about any other library or
+	 * application, and these are how it stays that way. Add to them from a
+	 * separate script — `http-aware-htmx.js` beside this file is the worked
+	 * example — exactly as `http-aware-formatters.js` adds to `formatters`.
+	 */
+
+	/** `(headers, form) => void` — mutate the header list before the request goes. */
+	static requestHooks = [];
+
+	/** Attributes marking an element in a response as an out-of-band update. */
+	static oobAttributes = ['data-swap-oob'];
+
+	/** Response headers by which the server may redirect the swap. */
+	static retargetHeaders = ['X-Retarget'];
+	static reswapHeaders = ['X-Reswap'];
+
+	/** First present value among `names`, or null. */
+	static header(response, names) {
+		for (const n of names) {
+			const v = response.headers.get(n);
+			if (v) return v;
+		}
+		return null;
+	}
+
+	/** CSS selector matching any element marked out-of-band. */
+	static get oobSelector() {
+		return HTTPAwareForm.oobAttributes.map(a => `[${a}]`).join(',');
+	}
+
 	formatValue(value, formatSpec) {
 		value = value ?? '';
 		const m = formatSpec?.match(/^(\w+)(?:\(([^)]*)\))?$/);
@@ -118,7 +149,7 @@ class HTTPAwareForm extends HTMLFormElement {
 	 * events. `autosubmit="change"` gives commit-point saves — the browser
 	 * fires `change` on blur-after-edit, on Enter in a text field, and on
 	 * select/checkbox/radio/slider commit — with NO submit mid-typing, so
-	 * the out-of-band re-render (e.g. /sse/tab swap) never races an input
+	 * an out-of-band re-render never races an input
 	 * the user is still inside.
 	 *
 	 * Duration syntax: bare integer = milliseconds (canonical: `debounce="300"`).
@@ -277,7 +308,7 @@ class HTTPAwareForm extends HTMLFormElement {
 			// matches its server-rendered default is dropped. The browser tracks
 			// the default natively via defaultValue / defaultChecked /
 			// defaultSelected, so there is no shadow state to maintain — after a
-			// successful PATCH the SSE-rendered partial swaps the controls and
+			// successful PATCH the swapped-in partial replaces the controls and
 			// the new wire values become the new defaults automatically.
 			// RFC 5789: PATCH bodies describe deltas, not the full resource.
 			// Raw getAttribute (not the formMethod IDL property): the IDL property
@@ -468,7 +499,7 @@ class HTTPAwareForm extends HTMLFormElement {
 	 * the focused element's id + caret. Restore with restoreEditState after
 	 * the swap; elements are re-found by id, so the incoming render must keep
 	 * stable ids (server-rendered partials do). Shared by swapResponse here
-	 * and the /sse/tab swap handler in index.js — ONE preservation mechanism.
+	 * and any out-of-band swap handler a host installs — ONE mechanism.
 	 * Returns null when there is nothing to preserve.
 	 */
 	static captureEditState(container) {
@@ -557,23 +588,16 @@ class HTTPAwareForm extends HTMLFormElement {
 			body = this.encodeBody(formData, this._submitter?.formEnctype || this.enctype || 'application/x-www-form-urlencoded');
 		}
 
-		// Add HX-Request header when targeting a DOM element (partial request)
-		const t = this.effectiveTarget;
-		if (t?.selector.startsWith('#') || t?.selector.startsWith('.')) {
-			headers.push(['HX-Request', 'true']);
-		}
-
-		// Add tab ID for SSE targeting (server pushes URL updates to specific tab)
-		if (window.tabId) {
-			headers.push(['X-Tab-Id', window.tabId]);
-		}
+		// Anything else a host or an interop layer wants on the wire. The core
+		// sends nothing it did not read off this form.
+		for (const hook of HTTPAwareForm.requestHooks) hook(headers, this);
 
 		return new Request(url.href, { method, headers, body, redirect: 'follow' });
 	}
 
 	async swapResponse(response) {
 		// 204 No Content: the server explicitly said "nothing to show" — the
-		// visible change (if any) arrives out-of-band on /sse/tab. Without this
+		// visible change (if any) arrives out of band. Without this
 		// guard a 204 with a target= would swap the empty body in and wipe the
 		// target (e.g. a DELETE on the toolbar form whose target is the dialog).
 		// Mirrors the same guard in navigateWithResponse (the no-target path).
@@ -593,26 +617,24 @@ class HTTPAwareForm extends HTMLFormElement {
 					try { message = JSON.parse(text).message || text; } catch { message = text; }
 				} catch { /* body unreadable — status alone will have to do */ }
 				console.error('http-aware: request failed', response.status, message);
-				// Consumers that render their own PERSISTENT inline error call
-				// preventDefault() to suppress this fallback toast (house style:
-				// no auto-dismissing toasts). Unhandled errors still toast.
+				// The event is the whole mechanism: it is cancelable so a
+				// consumer rendering its own inline error can preventDefault()
+				// and suppress whatever fallback the host installs. The library
+				// itself shows nothing — it has no business assuming a host UI.
 				const errEvent = new CustomEvent('http-aware-error', {
 					detail: { status: response.status, message },
 					bubbles: true,
 					cancelable: true,
 				});
 				this.dispatchEvent(errEvent);
-				if (!errEvent.defaultPrevented) {
-					window.showToast?.(message || `Request failed (${response.status})`, 'error');
-				}
 				return;
 			}
 		}
-		// HX-Retarget / HX-Reswap let the server redirect the swap on a
-		// per-response basis (HTMX convention). When absent, fall back to
-		// the form's declared target= attribute.
-		const retarget = response.headers.get('HX-Retarget');
-		const reswap   = response.headers.get('HX-Reswap');
+		// The server may redirect the swap per response. Header NAMES are
+		// configurable so an interop layer can accept another library's
+		// spelling; when absent, the form's own target= attribute stands.
+		const retarget = HTTPAwareForm.header(response, HTTPAwareForm.retargetHeaders);
+		const reswap   = HTTPAwareForm.header(response, HTTPAwareForm.reswapHeaders);
 		const t = this.effectiveTarget;
 		const target = retarget
 			? document.querySelector(retarget)
@@ -625,32 +647,20 @@ class HTTPAwareForm extends HTMLFormElement {
 
 		const html = await response.text();
 
-		// STRING-MATCH GATE: only run htmx.process on swapped content that
-		// actually carries htmx markup. Most swaps are htmx-free (http-aware
-		// buttons + native SSE), so skipping process is both faster and avoids
-		// running the ify extension / htmx:load over htmx-free content. Safe:
-		// ify is opt-in via the `hx-ify` attribute (matches 'hx-'), and the
-		// lone hx-boost element carries its own attribute (also matches). The
-		// A large subtree that must not be walked is fenced with `hx-disable`,
-		// which htmx honours natively.
-		// LOAD-BEARING wherever htmx and this library coexist: removable only
-		// once htmx is gone from the page.
-		const hasHtmx = html.includes('hx-') || html.includes('htmx');
-
 		// Parse response into fragment to detect OOB elements
 		const tpl = document.createElement('template');
 		tpl.innerHTML = html;
-		// Unwrap top-level <template> wrappers that shield hx-swap-oob content from
+		// Unwrap top-level <template> wrappers that shield out-of-band content from
 		// table-context foster-parenting. A response whose PRIMARY content is table rows
 		// (<tr>…) is parsed in table context; a trailing OOB <menu>/<div> full of <form>s
 		// would be foster-parented there, GUTTING each form (its controls become siblings of
 		// an emptied form → FormData empty, submit button orphaned). Server templates wrap such
-		// OOB in <template> so it parses inertly; htmx already looks inside those templates, so
-		// mirror it here (only unwrap templates that actually carry OOB, leaving literal
-		// <template> content untouched). Found with popover menus delivered OOB.
+		// OOB in <template> so it parses inertly, so look inside them here — only
+		// those that actually carry OOB, leaving literal <template> content
+		// untouched. Found with popover menus delivered OOB.
 		const children = [];
 		for (const node of [...tpl.content.children]) {
-			if (node.tagName === 'TEMPLATE' && node.content.querySelector('[hx-swap-oob]')) {
+			if (node.tagName === 'TEMPLATE' && node.content.querySelector(HTTPAwareForm.oobSelector)) {
 				children.push(...node.content.children);
 			} else {
 				children.push(node);
@@ -658,12 +668,13 @@ class HTTPAwareForm extends HTMLFormElement {
 		}
 
 		// Separate primary target content from OOB elements.
-		// When the server set HX-Retarget the whole payload is meant for
+		// When the server retargeted, the whole payload is meant for
 		// that target — skip the auto-OOB heuristic, otherwise children
 		// that share an id with existing DOM nodes (the common case for a
 		// full-container refresh) get yanked out and the primary swap ends
 		// up wiping the container.
 		const primaryParts = [];
+		const oobTargets = [];
 		if (retarget) {
 			for (const child of children) primaryParts.push(child.outerHTML);
 		} else {
@@ -676,17 +687,15 @@ class HTTPAwareForm extends HTMLFormElement {
 						// the morph.
 						HTTPAwareForm.morphSwap(oobTarget, child, this._lastSubmittedNames);
 					} else {
-						// Preserve in-flight edits + focus through the OOB replace —
-						// same mechanism as the /sse/tab swap handler (index.js).
+						// Preserve in-flight edits + focus through the OOB replace.
 						const oobState = HTTPAwareForm.captureEditState(oobTarget);
 						oobTarget.outerHTML = child.outerHTML;
 						HTTPAwareForm.restoreEditState(oobState);
 					}
-					// Process the freshly-swapped OOB node so hx-* inside it
-					// (e.g. contacts/filter, card-items) goes live — mirrors the
-					// SSE path's htmx.process (index.js ~L94). Gated above.
+					// Report the freshly-swapped node on the swapped event, so an
+					// interop layer can wire up whatever markup it owns.
 					const replaced = document.getElementById(child.id);
-					if (hasHtmx && replaced && typeof htmx !== 'undefined') htmx.process(replaced);
+					if (replaced) oobTargets.push(replaced);
 				} else {
 					primaryParts.push(child.outerHTML);
 				}
@@ -735,32 +744,26 @@ class HTTPAwareForm extends HTMLFormElement {
 		}
 		HTTPAwareForm.restoreEditState(primaryState);
 
-		// Process the primary swap so hx-* in the swapped content goes live —
-		// parity with the SSE handler's htmx.process (index.js ~L94). Gated by
-		// hasHtmx so htmx-free swaps (the common case) skip the walk. 'delete'
-		// removes the node and 'none' inserts nothing — nothing to process.
-		// outerHTML/beforebegin/afterend land their nodes as siblings, so we
-		// process the parent; innerHTML/afterbegin/beforeend land inside target.
-		if (hasHtmx && typeof htmx !== 'undefined' && swap !== 'delete' && swap !== 'none') {
+		// Where the swapped content actually landed. 'delete' removes the node
+		// and 'none' inserts nothing, so there is nothing to report;
+		// outerHTML/beforebegin/afterend land their nodes as SIBLINGS, so the
+		// parent is the root, while innerHTML/afterbegin/beforeend land inside
+		// the target. Reported on the event below rather than walked here — the
+		// library has no markup of its own to wire up.
+		let swapRoot = null;
+		if (swap !== 'delete' && swap !== 'none') {
 			const sibling = swap === 'outerHTML' || swap === 'beforebegin' || swap === 'afterend';
-			const processRoot = sibling ? targetParent : target;
-			if (processRoot) htmx.process(processRoot);
+			swapRoot = (sibling ? targetParent : target) || null;
 		}
 
-		// Update browser URL from HX-Push-Url header
-		const pushUrl = response.headers.get('HX-Push-Url');
-		if (pushUrl && pushUrl !== 'false') {
-			history.pushState({}, '', pushUrl);
-		}
-
-		// Post-swap notification. http-aware swaps do NOT fire htmx:afterSwap (we are not
-		// htmx), so scripts that re-initialize swapped-in content (e.g. the top-filter bars'
-		// JS-populated selects) subscribe to THIS event instead. Deliberately a distinct
-		// name: synthesizing htmx's own event would wake every htmx listener with a
-		// detail shape we don't honor.
+		// Post-swap notification, and the library's single seam for anything that
+		// must run over freshly-swapped markup: a script re-initialising controls,
+		// or an interop layer wiring up another library's attributes. Deliberately
+		// a name of our own — synthesising some other library's event would wake
+		// every listener it has with a detail shape we do not honour.
 		document.dispatchEvent(new CustomEvent('http-aware:swapped', {
 			bubbles: true,
-			detail: { target },
+			detail: { target, swapRoot, oobTargets, response },
 		}));
 	}
 

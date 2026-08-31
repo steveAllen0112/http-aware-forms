@@ -1,11 +1,12 @@
 {
   "name": "http-aware-forms",
   "version": "2.0.0",
-  "description": "HTML forms that speak the whole of HTTP — every method, request headers, matrix parameters, dirty-only PATCH bodies and namespaced fieldsets, declared in markup with no framework.",
+  "description": "HTML forms that speak the whole of HTTP \u2014 every method, request headers, matrix parameters, dirty-only PATCH bodies and namespaced fieldsets, declared in markup with no framework.",
   "main": "http-aware.js",
   "files": [
     "http-aware.js",
     "http-aware-formatters.js",
+    "http-aware-htmx.js",
     "dist/",
     "README.md",
     "LICENSE"
@@ -14,8 +15,15 @@
     "test": "node runner.mjs"
   },
   "keywords": [
-    "html", "forms", "http", "rest", "hypermedia",
-    "custom-elements", "patch", "progressive-enhancement", "no-framework"
+    "html",
+    "forms",
+    "http",
+    "rest",
+    "hypermedia",
+    "custom-elements",
+    "patch",
+    "progressive-enhancement",
+    "no-framework"
   ],
   "author": "Steve Allen",
   "license": "MIT",

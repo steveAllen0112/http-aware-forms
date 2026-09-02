@@ -10,15 +10,21 @@ All of it is declared in attributes. There is no configuration, no build step an
 
 ## Installation
 
-```html
-<script src="https://raw.githubusercontent.com/steveAllen0112/http-aware-forms/main/dist/http-aware.min.js"></script>
-```
-
-Or use the unminified source for development:
+One file, no build step:
 
 ```html
 <script src="https://raw.githubusercontent.com/steveAllen0112/http-aware-forms/main/http-aware.js"></script>
 ```
+
+Optional, and each loaded *after* it: `http-aware-formatters.js` for named value
+formatters in header templates, and `http-aware-htmx.js` if the page also runs
+htmx.
+
+There is deliberately no minified build. The source is one readable file, and
+minifying it returned about 28% before gzip — which every server already does on
+the wire, and does better. Shipping a `dist/` meant maintaining a second artifact
+that could fall out of step with the source without anyone noticing, and in 1.0
+it did exactly that.
 
 ## Quick Example
 

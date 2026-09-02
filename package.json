@@ -7,7 +7,6 @@
     "http-aware.js",
     "http-aware-formatters.js",
     "http-aware-htmx.js",
-    "dist/",
     "README.md",
     "LICENSE"
   ],

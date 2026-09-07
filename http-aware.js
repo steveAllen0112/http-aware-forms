@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v2.0 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v2.0.1 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([
@@ -674,13 +674,22 @@ class HTTPAwareForm extends HTMLFormElement {
 		// full-container refresh) get yanked out and the primary swap ends
 		// up wiping the container.
 		const primaryParts = [];
+		// A child whose id already exists INSIDE the target is NOT out-of-band.
+		// A primary innerHTML/outerHTML swap destroys the target's content, so an
+		// in-place replacement there is wiped a few lines later -- and the child is
+		// not part of the primary payload either, so it is simply lost. Insertion
+		// swaps keep the target's content, so the heuristic stands for them.
+		const primaryWipesTarget = swap === 'innerHTML' || swap === 'outerHTML'
+			|| !['beforebegin', 'afterbegin', 'beforeend', 'afterend', 'delete', 'none', 'morph'].includes(swap);
 		const oobTargets = [];
 		if (retarget) {
 			for (const child of children) primaryParts.push(child.outerHTML);
 		} else {
 			for (const child of children) {
-				if (child.id && document.getElementById(child.id) && child.id !== target.id) {
-					const oobTarget = document.getElementById(child.id);
+				const existing = child.id ? document.getElementById(child.id) : null;
+				const insideTarget = !!existing && primaryWipesTarget && target.contains(existing);
+				if (existing && child.id !== target.id && !insideTarget) {
+					const oobTarget = existing;
 					if (child.getAttribute('data-swap') === 'morph') {
 						// Morph-marked OOB root: reconcile in place;
 						// per-field dirty/focus protection lives inside

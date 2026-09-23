@@ -139,6 +139,27 @@ For structured headers with parameters, use template interpolation:
 
 Without a `target`, every method navigates to the response, just as a native form does. With one, the reply is swapped into the page instead — see [Targeting the Response](#targeting-the-response).
 
+### An action's own query
+
+A native GET form throws away any query its `action` already carries and writes the form data in its place. HTTP-Aware Forms does that only when the action is empty or absent — the platform's own case, where the form submits to the page's current address and that address's query is the previous submission's.
+
+An **explicit** action is merged into instead. For GET, HEAD and DELETE:
+
+1. every pair of the action's query whose key names a control of the form is dropped — a control owns its key whether or not it submits anything, so an unchecked box, an empty multi-select or a disabled field still withdraws the action's copy;
+2. every other pair is kept exactly as written, in its order;
+3. the form's own pairs follow.
+
+```html
+<!-- The server wrote the found set into the action; the form states only `status`. -->
+<form is="http-aware" method="get" action="/orders?region=west&status=open" target="#results">
+	<select name="status"><option>open</option><option>closed</option></select>
+	<button>Apply</button>
+</form>
+<!-- choosing "closed" sends /orders?region=west&status=closed -->
+```
+
+A namespaced control owns its wire name (`lease[term]`), and a control inside a `request-header` fieldset owns its own name, so a key the form states as a header is not also sent from the action. See `docs/decisions/ADR-2026.09.23.explicit-action-query-merges.md`.
+
 ## Namespaced Fieldsets
 
 A `fieldset` marked `is="name-space"` prefixes the fields it contains:

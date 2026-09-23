@@ -208,6 +208,47 @@
 		<h2>What the server received</h2>
 		<output form="demo" id="result">Submit the form to see the request as the server saw it.</output>
 	</section>
+
+	<h2>An action's own query</h2>
+	<p>
+		This action already names a query. The form is merged into it: every key a
+		control of the form names is the form's to state, including a key whose
+		boxes are all unchecked; every other key rides through as the action wrote it.
+	</p>
+	<form is="http-aware" id="merge" method="get"
+	      action="http://localhost:9999/companies?keep=a%20b&amp;stage=old&amp;region=east&amp;lease%5Bterm%5D=12&amp;rows=9&amp;pred=state%3DCA"
+	      target="#merge-result">
+		<label>Stage
+			<select name="stage">
+				<option value="open">Open</option>
+				<option value="won">Won</option>
+			</select>
+		</label>
+		<fieldset>
+			<legend>Region</legend>
+			<label><input type="checkbox" name="region" value="east"> East</label>
+			<label><input type="checkbox" name="region" value="west"> West</label>
+		</fieldset>
+		<fieldset is="name-space" name="lease">
+			<label>Term <input type="number" name="term" value="36"></label>
+		</fieldset>
+		<fieldset is="request-header" header="X-Rows" value="{rows}">
+			<label>Rows <input type="number" name="rows" value="5"></label>
+		</fieldset>
+		<button type="submit">Send</button>
+	</form>
+	<output form="merge" id="merge-result"></output>
+
+	<h2>No action</h2>
+	<p>
+		With no action the form submits to this page's own address. Its query is the
+		previous submission's, so it is replaced, as a native form replaces it.
+	</p>
+	<form is="http-aware" id="self" method="get" target="#self-result">
+		<label>Fresh <input type="text" name="fresh" value="1"></label>
+		<button type="submit">Send</button>
+	</form>
+	<output form="self" id="self-result"></output>
 </main>
 
 <script src="http-aware.js"></script>

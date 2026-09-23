@@ -49,8 +49,11 @@ async function runTests() {
 
 			// Capture the request
 			let captured = {};
+			// A form with no action submits to the page's own address, so a case
+			// that tests one (capture_self) captures the page's host as well.
+			const self = 'http://localhost:8000/index-standalone.html?';
 			const handleRequest = (request) => {
-				if (request.url().includes('localhost:9999')) {
+				if (request.url().includes('localhost:9999') || (tc.capture_self && request.url().startsWith(self))) {
 					captured.method = request.method();
 					captured.url = request.url();
 					captured.headers = request.headers();
@@ -60,7 +63,9 @@ async function runTests() {
 			page.on('request', handleRequest);
 
 			// Load test page (standalone, no HTMX)
-			await page.goto('http://localhost:8000/index-standalone.html');
+			// page_query loads the page at an address that already carries a query,
+			// which is what a self-submitting form submits back to.
+			await page.goto('http://localhost:8000/index-standalone.html' + (tc.page_query || ''));
 			await page.waitForLoadState('networkidle');
 
 			// Set form values
@@ -95,19 +100,27 @@ async function runTests() {
 			// so a new test case can introduce new controls without editing the
 			// runner. The known fields keep their explicit defaults above,
 			// because existing cases depend on a missing key meaning "default".
+			// `form` names the form a case submits (default: the demo form), and
+			// every generic field is looked up inside it, so two forms may use the
+			// same control name without a case reaching into the wrong one.
+			const form = tc.form || 'demo';
 			const known = ['page', 'per', 'view', 'wait', 'first', 'second', 'status', 'q'];
 			for (const [name, value] of Object.entries(fs)) {
 				if (known.includes(name)) continue;
-				const sel = `[name="${name}"]`;
+				const sel = `#${form} [name="${name}"]`;
 				const tag = await page.$eval(sel, (el) => el.tagName).catch(() => null);
 				if (tag === 'SELECT') await page.selectOption(sel, value);
 				else if (tag) await page.fill(sel, value);
 				else console.log(`  [warn] no control named ${name}`);
 			}
+			// Checkboxes and radios, by selector: { "<selector>": true | false }.
+			for (const [sel, on] of Object.entries(tc.checks || {})) {
+				await page.setChecked(sel, on);
+			}
 
 			// Submit
 			captured = {};
-			await page.click('button[type="submit"]');
+			await page.click(`#${form} button[type="submit"]`);
 			await page.waitForTimeout(1000);
 
 			// Validate
@@ -134,6 +147,12 @@ async function runTests() {
 				queryString = parsed.search.slice(1); // Remove leading ?
 			} catch (e) {
 				// URL parsing failed
+			}
+
+			// Check query_exact: the whole query, byte for byte and in order.
+			if (expected.query_exact !== undefined && queryString !== expected.query_exact) {
+				errors.push(`Query is '${queryString}', expected exactly '${expected.query_exact}'`);
+				passed = false;
 			}
 
 			// Check query_must_contain

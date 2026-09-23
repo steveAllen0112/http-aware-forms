@@ -8,6 +8,10 @@ const COMBINABLE_HEADERS = new Set([
 	'transfer-encoding', 'upgrade', 'via', 'warning', 'link'
 ]);
 
+// The submittable elements (HTML §4.10.2, "Categories"): the controls that can
+// put a pair on the wire. A form-associated custom element is one too.
+const SUBMITTABLE = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA']);
+
 class RequestHeader extends HTMLFieldSetElement {
 	static get observedAttributes() { return ['header', 'value']; }
 
@@ -344,10 +348,63 @@ class HTTPAwareForm extends HTMLFormElement {
 			// echo win for exactly these fields (a clamped/quantized commit must
 			// display), while other dirty fields keep their unsubmitted edits.
 			this._lastSubmittedNames = new Set(formData.keys());
+			// Read inside the rename window, so a namespaced control owns its
+			// WIRE name — the one the query merge in buildRequest compares.
+			this._ownedKeys = this._ownedQueryKeys();
 			return formData;
 		} finally {
 			for (const [el, name] of renamed) el.name = name;
 		}
+	}
+
+	/**
+	 * The keys this form states in a query: the name of every submittable
+	 * control associated with it. A control owns its key whether or not it
+	 * submits anything this time — an unchecked box, an empty multi-select, a
+	 * disabled field, a button that is not the submitter — because a form that
+	 * CAN state a key is the authority on it, and its silence says "none". Were
+	 * ownership read off the submitted pairs instead, unchecking the last box of
+	 * a key would leave the action's copy of that key in place, and the value
+	 * could never be withdrawn. An image button owns the two coordinate keys it
+	 * would send.
+	 */
+	_ownedQueryKeys() {
+		const keys = new Set();
+		for (const el of this.elements) {
+			if (!el.name) continue;
+			if (!SUBMITTABLE.has(el.tagName) && !el.constructor?.formAssociated) continue;
+			if (el.tagName === 'INPUT' && el.type === 'image') {
+				keys.add(`${el.name}.x`);
+				keys.add(`${el.name}.y`);
+			} else {
+				keys.add(el.name);
+			}
+		}
+		return keys;
+	}
+
+	/**
+	 * An explicit action's query, overlaid by the form. Every pair of the
+	 * action's query whose key the form owns is dropped; the rest are kept
+	 * byte-exact and in their order; the form's own pairs follow. It is
+	 * Object.assign over an ordered multimap: repeated keys survive on both
+	 * sides, and the form wins on every key it names.
+	 *
+	 * Kept pairs are copied as raw segments rather than parsed and
+	 * re-serialised, because re-serialising is not neutral — `%20` would come
+	 * back as `+`, and a server that treats the query as an identity (a cache
+	 * key, a canonical address) would see a different URL for the same request.
+	 */
+	static mergeQuery(search, owned, pairs) {
+		const kept = search.replace(/^\?/, '').split('&').filter(segment =>
+			segment && !owned.has(HTTPAwareForm._decodeKey(segment.split('=', 1)[0]))
+		);
+		const added = pairs.toString();
+		return [...kept, ...(added ? [added] : [])].join('&');
+	}
+
+	static _decodeKey(raw) {
+		try { return decodeURIComponent(raw.replace(/\+/g, ' ')); } catch { return raw; }
 	}
 
 	/**
@@ -579,11 +636,20 @@ class HTTPAwareForm extends HTMLFormElement {
 		// there is no way to tell "no formaction set" apart from "formaction
 		// equals the current page." getAttribute returns null when unset and
 		// the relative URL otherwise; new URL(...) below resolves it.
-		const url = new URL(this._submitter?.getAttribute('formaction') || this.getAttribute('action') || location.href, location.origin);
+		const action = this._submitter?.getAttribute('formaction') || this.getAttribute('action') || '';
+		const url = new URL(action || location.href, location.origin);
 		let body = null;
 
 		if (['GET', 'HEAD', 'DELETE'].includes(method)) {
-			url.search = new URLSearchParams([...formData].map(([k, v]) => [k, v instanceof File ? v.name : v]));
+			const pairs = new URLSearchParams([...formData].map(([k, v]) => [k, v instanceof File ? v.name : v]));
+			// An EXPLICIT action is a URL the author wrote, query and all, so the
+			// form is merged into it rather than written over it. An empty or
+			// absent action is the platform's case — the form submits to the
+			// document's own address, whose query is the previous submission's —
+			// and keeps the platform's replacement, which is what stops a
+			// self-submitting search box accumulating `q=…&q=…` on every send.
+			// See docs/decisions/ADR-2026.09.23.explicit-action-query-merges.md
+			url.search = action.trim() ? HTTPAwareForm.mergeQuery(url.search, this._ownedKeys, pairs) : pairs;
 		} else {
 			body = this.encodeBody(formData, this._submitter?.formEnctype || this.enctype || 'application/x-www-form-urlencoded');
 		}

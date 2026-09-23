@@ -190,7 +190,7 @@
 		},
 		{
 			"id": "unmarked_named_fieldset_stays_flat",
-			"description": "A named fieldset WITHOUT the marker is untouched \u2014 the guard that lets this ship without breaking existing forms",
+			"description": "A named fieldset WITHOUT the marker is untouched — the guard that lets this ship without breaking existing forms",
 			"form_state": {
 				"cost": "999"
 			},
@@ -200,6 +200,49 @@
 				],
 				"query_must_not_contain": [
 					"pricing%5Bcost%5D="
+				]
+			}
+		},
+		{
+			"id": "explicit_action_merges_owned_keys",
+			"description": "An explicit action's query is merged: keys the form's controls name are the form's (a namespaced control owns its wire name, a header-bound control its own name); every other key is kept byte-exact and in order",
+			"form": "merge",
+			"form_state": {
+				"stage": "won"
+			},
+			"checks": {
+				"#merge [name=\"region\"][value=\"west\"]": true
+			},
+			"expected_request": {
+				"headers": {
+					"X-Rows": "5"
+				},
+				"query_exact": "keep=a%20b&pred=state%3DCA&stage=won&region=west&lease%5Bterm%5D=36"
+			}
+		},
+		{
+			"id": "unchecked_boxes_withdraw_their_key",
+			"description": "A control owns its key even when it submits nothing: with every region box unchecked, the action's region=east is withdrawn, not kept",
+			"form": "merge",
+			"form_state": {},
+			"expected_request": {
+				"query_exact": "keep=a%20b&pred=state%3DCA&stage=open&lease%5Bterm%5D=36",
+				"query_must_not_contain": [
+					"region="
+				]
+			}
+		},
+		{
+			"id": "no_action_keeps_platform_replacement",
+			"description": "A form with no action submits to the page's own address and replaces its query, as a native form does, so a self-submitting form cannot accumulate its own keys",
+			"form": "self",
+			"page_query": "?stale=1",
+			"capture_self": true,
+			"form_state": {},
+			"expected_request": {
+				"query_exact": "fresh=1",
+				"query_must_not_contain": [
+					"stale="
 				]
 			}
 		}

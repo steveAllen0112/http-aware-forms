@@ -239,6 +239,37 @@
 	</form>
 	<output form="merge" id="merge-result"></output>
 
+	<h2>A value composed from several controls</h2>
+	<p>
+		HTML cannot build one value out of an operator and its operand, or a bound
+		and its comparison. A <code>query-param</code> fieldset states the pair as a
+		template; the controls inside it are its variables, and submit nothing of
+		their own. An empty variable withdraws the pair.
+	</p>
+	<form is="http-aware" id="compose" method="get"
+	      action="http://localhost:9999/companies?name=contains.old&amp;keep=1"
+	      target="#compose-result">
+		<fieldset is="query-param" name="name" value="{op}.{text}">
+			<legend>Name</legend>
+			<label><input type="radio" name="op" value="contains" checked> Contains</label>
+			<label><input type="radio" name="op" value="feq"> Fuzzy</label>
+			<label>Text <input type="search" name="text"></label>
+		</fieldset>
+		<fieldset is="query-param" name="amount" value="gte.{lo}">
+			<label>From <input type="number" name="lo"></label>
+		</fieldset>
+		<fieldset is="query-param" name="amount" value="lte.{hi}">
+			<label>To <input type="number" name="hi"></label>
+		</fieldset>
+		<fieldset is="name-space" name="lease">
+			<fieldset is="query-param" name="term" value="gte.{months}">
+				<label>Months <input type="number" name="months"></label>
+			</fieldset>
+		</fieldset>
+		<button type="submit">Send</button>
+	</form>
+	<output form="compose" id="compose-result"></output>
+
 	<h2>No action</h2>
 	<p>
 		With no action the form submits to this page's own address. Its query is the

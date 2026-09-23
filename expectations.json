@@ -245,6 +245,56 @@
 					"stale="
 				]
 			}
+		},
+		{
+			"id": "query_param_composes_one_pair",
+			"description": "A query-param fieldset submits one composed pair; its controls submit nothing of their own; the fieldset owns its key, so the action's copy is withdrawn",
+			"form": "compose",
+			"form_state": {
+				"text": "acme"
+			},
+			"checks": {
+				"#compose [name=\"op\"][value=\"feq\"]": true
+			},
+			"expected_request": {
+				"query_exact": "keep=1&name=feq.acme",
+				"query_must_not_contain": [
+					"op=",
+					"text="
+				]
+			}
+		},
+		{
+			"id": "query_param_empty_variable_withdraws_the_pair",
+			"description": "With every variable empty no composed pair is sent, and the action's copy of each composed key is still withdrawn",
+			"form": "compose",
+			"form_state": {},
+			"expected_request": {
+				"query_exact": "keep=1",
+				"query_must_not_contain": [
+					"name=",
+					"amount=",
+					"lo=",
+					"hi="
+				]
+			}
+		},
+		{
+			"id": "query_param_range_and_namespace",
+			"description": "Two fieldsets sharing a name are two pairs (a range is a conjunction); a composed key inside a name-space fieldset is namespaced like a control",
+			"form": "compose",
+			"form_state": {
+				"lo": "10",
+				"hi": "99",
+				"months": "12"
+			},
+			"expected_request": {
+				"query_exact": "keep=1&amount=gte.10&amount=lte.99&lease%5Bterm%5D=gte.12",
+				"query_must_not_contain": [
+					"months=",
+					"name="
+				]
+			}
 		}
 	],
 	"header_format_spec": {

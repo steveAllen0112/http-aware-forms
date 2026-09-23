@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v3.0.0 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v3.1.0 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([
@@ -12,12 +12,21 @@ const COMBINABLE_HEADERS = new Set([
 // put a pair on the wire. A form-associated custom element is one too.
 const SUBMITTABLE = new Set(['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA']);
 
-class RequestHeader extends HTMLFieldSetElement {
-	static get observedAttributes() { return ['header', 'value']; }
+// A `{name}` or `{name,format}` placeholder in a fieldset's value template.
+const PLACEHOLDER = /\{([a-zA-Z_][a-zA-Z0-9_-]*)(?:,([^}]+))?\}/g;
 
-	get header() { return this.getAttribute('header') || ''; }
-
+/**
+ * What the two composing fieldsets share: the controls a fieldset draws on
+ * (those it contains, and those linked to it by `for=`), their current values,
+ * and the interpolation of its `value` template. `{{` and `}}` are literal braces.
+ */
+class TemplatedFieldset extends HTMLFieldSetElement {
 	get template() { return this.getAttribute('value') || ''; }
+
+	/** The placeholder names the template refers to, escapes excluded. */
+	get placeholders() {
+		return [...this.template.replace(/\{\{|\}\}/g, '').matchAll(PLACEHOLDER)].map(m => m[1]);
+	}
 
 	get inputs() {
 		return [...this.form.elements].filter(el =>
@@ -34,11 +43,17 @@ class RequestHeader extends HTMLFieldSetElement {
 
 	interpolate(template, values) {
 		let result = template.replace(/\{\{/g, '\x00O\x00').replace(/\}\}/g, '\x00C\x00');
-		result = result.replace(/\{([a-zA-Z_][a-zA-Z0-9_-]*)(?:,([^}]+))?\}/g, (match, name, fmt) => {
+		result = result.replace(PLACEHOLDER, (match, name, fmt) => {
 			return name in values ? this.form.formatValue(values[name], fmt) : match;
 		});
 		return result.replace(/\x00O\x00/g, '{').replace(/\x00C\x00/g, '}');
 	}
+}
+
+class RequestHeader extends TemplatedFieldset {
+	static get observedAttributes() { return ['header', 'value']; }
+
+	get header() { return this.getAttribute('header') || ''; }
 
 	computeValue() {
 		const result = this.interpolate(this.template, this.values);
@@ -46,6 +61,35 @@ class RequestHeader extends HTMLFieldSetElement {
 	}
 }
 customElements.define('request-header', RequestHeader, { extends: 'fieldset' });
+
+/**
+ * <fieldset is="query-param" name="k" value="{op}.{q}"> — ONE form-data pair
+ * composed from the controls it contains, for the value HTML has no way to
+ * build out of several controls: an operator and its operand, a bound and its
+ * comparison. The controls inside submit nothing of their own. The fieldset
+ * submits `k=<value>` once every placeholder has a value, and nothing at all
+ * otherwise — an empty box withdraws the condition instead of sending
+ * `k=contains.` — and a disabled fieldset submits nothing, as a disabled
+ * control does. Several fieldsets may share a name: each is its own pair.
+ *
+ * It goes wherever the form's data goes — the query for GET, HEAD and DELETE,
+ * the body otherwise. Its name is namespaced like a control's, it owns that key
+ * in the action-query merge, and its pair follows the form's other pairs.
+ */
+class QueryParam extends TemplatedFieldset {
+	static get observedAttributes() { return ['name', 'value']; }
+
+	get key() { return this.getAttribute('name') || ''; }
+
+	/** The pair to submit under `wireKey`, or null when a placeholder is empty. */
+	computePair(wireKey) {
+		if (!wireKey) return null;
+		const values = this.values;
+		if (this.placeholders.some(name => !(name in values) || values[name] === '')) return null;
+		return [wireKey, this.interpolate(this.template, values)];
+	}
+}
+customElements.define('query-param', QueryParam, { extends: 'fieldset' });
 
 /**
  * <fieldset is="name-space" name="x"> — the fields it contains are submitted as
@@ -226,6 +270,31 @@ class HTTPAwareForm extends HTMLFormElement {
 		return new Set([...this.querySelectorAll('fieldset[is="request-header"]')].flatMap(el => el.inputs.flatMap(i=>i.name?[i.name]:[])));
 	}
 
+	/** The query-param fieldsets of this form, `form=` reassociation included. */
+	_queryParams() {
+		return [...this.elements].filter(el => el.tagName === 'FIELDSET' && el.getAttribute('is') === 'query-param');
+	}
+
+	/** The names of the controls a query-param fieldset composes — they submit nothing themselves. */
+	getComposedFields() {
+		return new Set(this._queryParams().flatMap(qp => qp.inputs.flatMap(i => i.name ? [i.name] : [])));
+	}
+
+	/**
+	 * `name` as the namespace grammar spells it for a control placed where
+	 * `node` is — the same grammar _applyNamespaces writes onto the DOM, read
+	 * without renaming anything, for a fieldset that names a pair of its own.
+	 */
+	_wireName(node, name) {
+		const groups = [];
+		for (let n = node.parentElement; n && n !== this; n = n.parentElement) {
+			if (n.tagName === 'FIELDSET' && n.getAttribute('is') === 'name-space' && n.getAttribute('name')) {
+				groups.unshift(n.getAttribute('name'));
+			}
+		}
+		return groups.length ? groups[0] + [...groups.slice(1), name].map(part => `[${part}]`).join('') : name;
+	}
+
 	collectHeaders() {
 		const headerMap = new Map();
 
@@ -252,6 +321,8 @@ class HTTPAwareForm extends HTMLFormElement {
 	 *    sales_rep[role]=sales_rep.
 	 *  · anything inside a fieldset[is="request-header"]: those fields are
 	 *    bound out of the body and into a header already.
+	 *  · anything inside a fieldset[is="query-param"]: those fields are the
+	 *    template's variables, and the fieldset names the pair itself.
 	 *  · a control reassociated to some other form by the `form=` attribute.
 	 *  · fieldsets themselves. They appear in form.elements, and a namespace
 	 *    fieldset has a name, but a fieldset submits nothing — and renaming
@@ -272,7 +343,7 @@ class HTTPAwareForm extends HTMLFormElement {
 			for (let node = el.parentElement; node && node !== this; node = node.parentElement) {
 				if (node.tagName !== 'FIELDSET') continue;
 				const marker = node.getAttribute('is');
-				if (marker === 'request-header') { headerBound = true; break; }
+				if (marker === 'request-header' || marker === 'query-param') { headerBound = true; break; }
 				// unshift: the walk runs inward-out, the grammar reads outward-in.
 				if (marker === 'name-space' && node.getAttribute('name')) groups.unshift(node.getAttribute('name'));
 			}
@@ -308,6 +379,18 @@ class HTTPAwareForm extends HTMLFormElement {
 			}
 			for (const name of this.getHeaderBoundFields()) formData.delete(name);
 
+			// A query-param fieldset's controls are its template's variables:
+			// they leave the entry list, and the pair they compose joins it.
+			for (const name of this.getComposedFields()) formData.delete(name);
+			const composed = [];
+			for (const qp of this._queryParams()) {
+				const pair = qp.computePair(this._wireName(qp, qp.key));
+				if (pair) {
+					formData.append(...pair);
+					composed.push([pair[0], qp]);
+				}
+			}
+
 			// PATCH method emits a dirty-only body: every form control whose value
 			// matches its server-rendered default is dropped. The browser tracks
 			// the default natively via defaultValue / defaultChecked /
@@ -329,6 +412,10 @@ class HTTPAwareForm extends HTMLFormElement {
 						if (!dirtyByName.has(el.name)) dirtyByName.set(el.name, []);
 						dirtyByName.get(el.name).push(el);
 					}
+				}
+				// A composed pair is dirty when any control it is composed from is.
+				for (const [key, qp] of composed) {
+					if (qp.inputs.some(el => !el.disabled && HTTPAwareForm._isDirty(el))) dirtyByName.set(key, [qp]);
 				}
 				// The submitter's own name/value is the ACTION intent (e.g. a
 				// <button name="is_primary" value="true"> in the comparison view),
@@ -366,12 +453,19 @@ class HTTPAwareForm extends HTMLFormElement {
 	 * ownership read off the submitted pairs instead, unchecking the last box of
 	 * a key would leave the action's copy of that key in place, and the value
 	 * could never be withdrawn. An image button owns the two coordinate keys it
-	 * would send.
+	 * would send. A query-param fieldset owns the key it names — composed or
+	 * not, like any control — and the controls inside it own nothing, because
+	 * their names are the template's variables rather than keys of the query.
 	 */
 	_ownedQueryKeys() {
 		const keys = new Set();
+		const queryParams = this._queryParams();
+		const variables = new Set(queryParams.flatMap(qp => qp.inputs));
+		for (const qp of queryParams) {
+			if (qp.key) keys.add(this._wireName(qp, qp.key));
+		}
 		for (const el of this.elements) {
-			if (!el.name) continue;
+			if (!el.name || variables.has(el)) continue;
 			if (!SUBMITTABLE.has(el.tagName) && !el.constructor?.formAssociated) continue;
 			if (el.tagName === 'INPUT' && el.type === 'image') {
 				keys.add(`${el.name}.x`);

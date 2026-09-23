@@ -126,6 +126,30 @@ For structured headers with parameters, use template interpolation:
 <!-- Sends: Content-Disposition: attachment; filename=report.pdf -->
 ```
 
+## Composing a Value from Several Controls
+
+HTML cannot build one form value out of several controls — an operator and its operand, a bound and its comparison. Every control submits its own pair. `<fieldset is="query-param">` states the pair as a template, with the same `{name}` / `{name,format}` placeholders a `request-header` uses:
+
+```html
+<fieldset is="query-param" name="name" value="{op}.{q}">
+	<label><input type="radio" name="op" value="contains" checked> Contains</label>
+	<label><input type="radio" name="op" value="eq"> Exactly</label>
+	<input type="search" name="q">
+</fieldset>
+<!-- Sends: name=contains.acme — and no op= or q= -->
+
+<fieldset is="query-param" name="amount" value="gte.{lo}"><input type="number" name="lo"></fieldset>
+<fieldset is="query-param" name="amount" value="lte.{hi}"><input type="number" name="hi"></fieldset>
+<!-- Sends: amount=gte.10&amount=lte.99, or only the bound that was filled in -->
+```
+
+- The controls inside are the template's **variables**: they submit nothing of their own.
+- The pair is sent only when **every placeholder has a value**. An empty box withdraws the condition instead of sending `name=contains.`, and a disabled fieldset sends nothing.
+- Several fieldsets may share a name; each is its own pair.
+- The pair goes wherever the form's data goes: the query for GET, HEAD and DELETE, the body otherwise. Under PATCH it counts as dirty when any of its variables is.
+- Inside a `name-space` fieldset its name is namespaced like a control's (`lease[term]`).
+- In the [action-query merge](#an-actions-own-query) the fieldset owns the key it names, and its variables own nothing.
+
 ## HTTP Methods
 
 | Method | Form Data Goes To |

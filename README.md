@@ -239,6 +239,18 @@ The submitter's own name and value are always sent, dirty or not — it states t
 | `delete` | Remove the target |
 | `none` | Do nothing with the body |
 
+**A new edition of the target.** When the response is a single element carrying the target's own id, it is a new edition of the target, and `innerHTML` puts that element's inner HTML in — never the element itself, which would nest the target inside itself with its id twice over. This is what a panel's route returns when it renders the whole panel so it can be addressed on its own:
+
+```html
+<section id="panel">…old rows…</section>
+<!-- target="#panel@innerHTML", and the response is: -->
+<aside id="panel">…new rows…</aside>
+<!-- becomes: -->
+<section id="panel">…new rows…</section>
+```
+
+The match is on id only; any other response goes in as it is. To place an element inside the target, use an insertion style (`beforeend`, `afterbegin`).
+
 `morph` is worth reaching for whenever the response contains the form that sent it: an `outerHTML` swap of a live panel destroys focus and any edit the user has begun, and a morph does not.
 
 Elements in the response carrying `hx-swap-oob` or `data-swap` are applied to their own targets by id, so one response can update several places at once.

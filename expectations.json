@@ -295,6 +295,33 @@
 					"name="
 				]
 			}
+		},
+		{
+			"id": "innerhtml_takes_the_edition",
+			"description": "innerHTML replaces the target's inner HTML: a response rooted at an element carrying the target's own id contributes that element's inner HTML, and does not nest inside the target",
+			"form": "edition",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"section#panel": 1,
+					"section#panel > p.fresh": 1,
+					"section#panel > aside": 0,
+					"#panel #panel": 0,
+					"section#panel > p.stale": 0
+				}
+			}
+		},
+		{
+			"id": "innerhtml_places_any_other_response_as_before",
+			"description": "A response whose root carries a different id is placed inside the target as it always was — the edition rule matches on the target's id only",
+			"form": "stranger",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"section#panel > aside#other > p.fresh": 1,
+					"section#panel > p.stale": 0
+				}
+			}
 		}
 	],
 	"header_format_spec": {

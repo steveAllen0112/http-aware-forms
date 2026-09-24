@@ -270,6 +270,20 @@
 	</form>
 	<output form="compose" id="compose-result"></output>
 
+	<h2>A new edition of the target</h2>
+	<p>
+		<code>innerHTML</code> replaces the target's inner HTML. When the response is one element
+		carrying the target's own id, it is a new edition of the target, and its inner HTML is
+		what goes in; the element does not nest inside the target.
+	</p>
+	<section id="panel"><p class="stale">old edition</p></section>
+	<form is="http-aware" id="edition" method="get" action="fixtures/edition-panel.html" target="#panel@innerHTML">
+		<button type="submit">Refresh the panel</button>
+	</form>
+	<form is="http-aware" id="stranger" method="get" action="fixtures/edition-other.html" target="#panel@innerHTML">
+		<button type="submit">Put another element in it</button>
+	</form>
+
 	<h2>No action</h2>
 	<p>
 		With no action the form submits to this page's own address. Its query is the

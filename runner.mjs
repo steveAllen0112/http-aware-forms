@@ -149,6 +149,16 @@ async function runTests() {
 				// URL parsing failed
 			}
 
+			// Check dom_counts: { "<selector>": <count> } after the swap — for a case whose
+			// point is where the response landed rather than what was requested.
+			for (const [sel, want] of Object.entries(expected.dom_counts || {})) {
+				const got = await page.locator(sel).count();
+				if (got !== want) {
+					errors.push(`DOM ${sel}: ${got} element(s), expected ${want}`);
+					passed = false;
+				}
+			}
+
 			// Check query_exact: the whole query, byte for byte and in order.
 			if (expected.query_exact !== undefined && queryString !== expected.query_exact) {
 				errors.push(`Query is '${queryString}', expected exactly '${expected.query_exact}'`);

@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v3.1.0 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v3.2.0 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([
@@ -834,6 +834,7 @@ class HTTPAwareForm extends HTMLFormElement {
 		// full-container refresh) get yanked out and the primary swap ends
 		// up wiping the container.
 		const primaryParts = [];
+		const primaryElements = [];
 		// A child whose id already exists INSIDE the target is NOT out-of-band.
 		// A primary innerHTML/outerHTML swap destroys the target's content, so an
 		// in-place replacement there is wiped a few lines later -- and the child is
@@ -843,7 +844,10 @@ class HTTPAwareForm extends HTMLFormElement {
 			|| !['beforebegin', 'afterbegin', 'beforeend', 'afterend', 'delete', 'none', 'morph'].includes(swap);
 		const oobTargets = [];
 		if (retarget) {
-			for (const child of children) primaryParts.push(child.outerHTML);
+			for (const child of children) {
+				primaryParts.push(child.outerHTML);
+				primaryElements.push(child);
+			}
 		} else {
 			for (const child of children) {
 				const existing = child.id ? document.getElementById(child.id) : null;
@@ -867,11 +871,22 @@ class HTTPAwareForm extends HTMLFormElement {
 					if (replaced) oobTargets.push(replaced);
 				} else {
 					primaryParts.push(child.outerHTML);
+					primaryElements.push(child);
 				}
 			}
 		}
 
-		const primaryHtml = primaryParts.join('');
+		// innerHTML means the target's INNER HTML. A response whose primary content is one
+		// element carrying the target's own id is a new edition of the target — the partial
+		// renders the whole panel so that its route is addressable on its own — and its inner
+		// HTML is what replaces the target's; the element itself does not go inside. Placing
+		// it inside would nest the target in itself, duplicate id and all; `beforeend` and its
+		// siblings are the styles that insert. Matched on id only, deliberately: any other
+		// response is placed as it always was.
+		// See: docs/decisions/ADR-2026.09.24.innerhtml-takes-the-edition.md
+		const edition = swap === 'innerHTML' && primaryElements.length === 1
+			&& primaryElements[0].id && primaryElements[0].id === target.id;
+		const primaryHtml = edition ? primaryElements[0].innerHTML : primaryParts.join('');
 		// Capture the parent BEFORE the swap: outerHTML/beforebegin/afterend
 		// insert the new node(s) as siblings, so the inserted content is reached
 		// via the parent, not via `target` (which outerHTML detaches entirely).

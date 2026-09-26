@@ -270,6 +270,26 @@
 	</form>
 	<output form="compose" id="compose-result"></output>
 
+	<h2>A control that shares a composed key</h2>
+	<p>
+		A query-param fieldset owns the key it names, and a submit button or a checkbox may carry the
+		same key: a quick pick beside a Since bound, a checked value beside a typed one. The fieldset
+		composes nothing when its variable is empty, and the other control's pair is sent as it is.
+	</p>
+	<form is="http-aware" id="compose-shared" method="get"
+	      action="http://localhost:9999/companies?when=old&amp;keep=1"
+	      target="#compose-shared-result">
+		<fieldset is="query-param" name="when" value="not.gte.{since}">
+			<label>Since <input type="date" name="since"></label>
+		</fieldset>
+		<label><input type="checkbox" name="tag" value="x"> x</label>
+		<fieldset is="query-param" name="tag" value="contains.{t}">
+			<label>Tag <input type="search" name="t"></label>
+		</fieldset>
+		<button type="submit" name="when" value="not.previous(7)">Last 7 days</button>
+	</form>
+	<output form="compose-shared" id="compose-shared-result"></output>
+
 	<h2>A new edition of the target</h2>
 	<p>
 		<code>innerHTML</code> replaces the target's inner HTML. When the response is one element

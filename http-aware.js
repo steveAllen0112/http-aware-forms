@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v3.2.0 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v3.2.1 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([
@@ -28,9 +28,13 @@ class TemplatedFieldset extends HTMLFieldSetElement {
 		return [...this.template.replace(/\{\{|\}\}/g, '').matchAll(PLACEHOLDER)].map(m => m[1]);
 	}
 
+	// The fieldset is not one of its own inputs. `contains` is inclusive, and a fieldset is in
+	// form.elements, so without `el !== this` a query-param fieldset counted itself: its NAME —
+	// the key it composes — was taken for a template variable, deleted from the form data, and
+	// every other control carrying that key went with it (a submit button, a checked box).
 	get inputs() {
 		return [...this.form.elements].filter(el =>
-			el.getAttribute('for') === this.id || this.contains(el)
+			el !== this && (el.getAttribute('for') === this.id || this.contains(el))
 		);
 	}
 

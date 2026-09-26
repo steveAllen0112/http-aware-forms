@@ -297,6 +297,22 @@
 			}
 		},
 		{
+			"id": "query_param_key_shared_with_the_submitter",
+			"description": "A submit button and a checkbox carrying a query-param fieldset's key are sent; the fieldset composes nothing when its variable is empty",
+			"form": "compose-shared",
+			"form_state": {},
+			"checks": {
+				"#compose-shared [name=\"tag\"][value=\"x\"]": true
+			},
+			"expected_request": {
+				"query_exact": "keep=1&tag=x&when=not.previous%287%29",
+				"query_must_not_contain": [
+					"since=",
+					"t="
+				]
+			}
+		},
+		{
 			"id": "innerhtml_takes_the_edition",
 			"description": "innerHTML replaces the target's inner HTML: a response rooted at an element carrying the target's own id contributes that element's inner HTML, and does not nest inside the target",
 			"form": "edition",

@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v3.2.1 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v3.3.0 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([

@@ -338,6 +338,17 @@
 					"section#panel > p.stale": 0
 				}
 			}
+		},
+		{
+			"id": "htmx_interop_names_the_current_page",
+			"description": "With http-aware-htmx.js loaded, a request carries HX-Current-URL, the page's own address, as htmx sends it",
+			"interop": "http-aware-htmx.js",
+			"form_state": {},
+			"expected_request": {
+				"headers": {
+					"HX-Current-URL": "http://localhost:8000/index-standalone.html"
+				}
+			}
 		}
 	],
 	"header_format_spec": {

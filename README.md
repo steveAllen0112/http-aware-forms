@@ -318,7 +318,7 @@ The core knows nothing about any other library. If a page runs htmx too — usua
 <script src="http-aware-htmx.js"></script>
 ```
 
-It teaches http-aware to recognise `hx-swap-oob` as an out-of-band marker, to honour `HX-Retarget`, `HX-Reswap` and `HX-Push-Url`, to send `HX-Request: true` on partial requests, and to run `htmx.process` over freshly-swapped markup so `hx-*` inside it goes live.
+It teaches http-aware to recognise `hx-swap-oob` as an out-of-band marker, to honour `HX-Retarget`, `HX-Reswap` and `HX-Push-Url`, to send `HX-Request: true` on partial requests and `HX-Current-URL` (the page's own address, as htmx sends it) on every request, and to run `htmx.process` over freshly-swapped markup so `hx-*` inside it goes live.
 
 ## Extending it
 

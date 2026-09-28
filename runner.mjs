@@ -67,6 +67,9 @@ async function runTests() {
 			// which is what a self-submitting form submits back to.
 			await page.goto('http://localhost:8000/index-standalone.html' + (tc.page_query || ''));
 			await page.waitForLoadState('networkidle');
+			// A case that exercises an optional add-on (http-aware-htmx.js) loads it
+			// onto the page first; the add-on registers its hooks as it loads.
+			if (tc.interop) await page.addScriptTag({ url: `http://localhost:8000/${tc.interop}` });
 
 			// Set form values
 			const fs = tc.form_state;

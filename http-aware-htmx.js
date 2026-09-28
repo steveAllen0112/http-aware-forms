@@ -13,7 +13,9 @@
 //   2. `HX-Retarget` and `HX-Reswap` may redirect a swap, alongside
 //      `X-Retarget` / `X-Reswap`.
 //   3. Send `HX-Request: true` on a partial request, which is what a server
-//      written for htmx branches on.
+//      written for htmx branches on, and `HX-Current-URL` on every request,
+//      the page's own address, as htmx does: a server uses it to know what the
+//      page holds, and so what it should send back besides the answer.
 //   4. Run `htmx.process` over freshly-swapped markup so hx-* inside it goes
 //      live, and honour `HX-Push-Url`.
 //
@@ -30,12 +32,14 @@
 	HTTPAwareForm.retargetHeaders.push('HX-Retarget');
 	HTTPAwareForm.reswapHeaders.push('HX-Reswap');
 
-	// 3 — announce a partial request the way an htmx-shaped server expects.
+	// 3 — announce a partial request, and the page it comes from, the way an
+	// htmx-shaped server expects.
 	HTTPAwareForm.requestHooks.push((headers, form) => {
 		const t = form.effectiveTarget;
 		if (t?.selector.startsWith('#') || t?.selector.startsWith('.')) {
 			headers.push(['HX-Request', 'true']);
 		}
+		headers.push(['HX-Current-URL', location.href]);
 	});
 
 	// Attributes worth a walk. htmx.process is not free, and most swaps on a

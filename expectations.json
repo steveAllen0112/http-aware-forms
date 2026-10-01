@@ -202,6 +202,112 @@
 					"pricing%5Bcost%5D="
 				]
 			}
+		},
+		{
+			"id": "patch_cleared_checkbox_sends_empty_value",
+			"description": "Under PATCH a box rendered checked and then unchecked is sent as its name with an empty value, and nothing unchanged is sent with it",
+			"form": "patch",
+			"form_state": {},
+			"checks": {
+				"#patch [name=\"active\"]": false
+			},
+			"expected_request": {
+				"body_exact": "active="
+			}
+		},
+		{
+			"id": "patch_default_follows_what_was_sent",
+			"description": "A control outside the swap target takes what was sent as its default once the server accepts it, so checking, unchecking and checking a box again each send a change",
+			"form": "patch",
+			"steps": [
+				{
+					"checks": {
+						"#patch [name=\"notify\"]": true
+					},
+					"expected_request": {
+						"body_exact": "notify=yes"
+					}
+				},
+				{
+					"checks": {
+						"#patch [name=\"notify\"]": false
+					},
+					"expected_request": {
+						"body_exact": "notify="
+					}
+				},
+				{
+					"checks": {
+						"#patch [name=\"notify\"]": true
+					},
+					"expected_request": {
+						"body_exact": "notify=yes"
+					}
+				}
+			]
+		},
+		{
+			"id": "patch_cleared_multiselect_sends_empty_value",
+			"description": "A multi-select rendered with options selected and then cleared is sent as its name with an empty value",
+			"form": "patch",
+			"form_state": {
+				"tags": []
+			},
+			"expected_request": {
+				"body_exact": "tags="
+			}
+		},
+		{
+			"id": "patch_cleared_namespaced_box_keeps_its_wire_name",
+			"description": "The empty value of a cleared box inside a name-space fieldset is sent under the namespaced name its checked value would carry",
+			"form": "patch",
+			"form_state": {},
+			"checks": {
+				"#patch [name=\"digest\"]": false
+			},
+			"expected_request": {
+				"body_exact": "prefs%5Bdigest%5D="
+			}
+		},
+		{
+			"id": "patch_header_bound_field_stays_out_of_the_body",
+			"description": "A changed header-bound field goes to its header and is not put back into the PATCH body as an empty value",
+			"form": "patch",
+			"form_state": {
+				"etag": "v2"
+			},
+			"checks": {
+				"#patch [name=\"notify\"]": true
+			},
+			"expected_request": {
+				"headers": {
+					"If-Match": "v2"
+				},
+				"body_exact": "notify=yes",
+				"body_must_not_contain": [
+					"etag="
+				]
+			}
+		},
+		{
+			"id": "patch_refused_change_is_sent_again",
+			"description": "A non-2xx PATCH promotes no default: the control is still dirty, and the next submission sends it again",
+			"form": "patch-refused",
+			"steps": [
+				{
+					"checks": {
+						"#patch-refused [name=\"notify\"]": true
+					},
+					"expected_request": {
+						"body_exact": "notify=yes"
+					}
+				},
+				{
+					"expected_request": {
+						"body_exact": "notify=yes"
+					}
+				}
+			]
 		}
 	],
 	"header_format_spec": {

@@ -17,7 +17,8 @@
 //      the page's own address, as htmx does: a server uses it to know what the
 //      page holds, and so what it should send back besides the answer.
 //   4. Run `htmx.process` over freshly-swapped markup so hx-* inside it goes
-//      live, and honour `HX-Push-Url`.
+//      live, and honour `HX-Push-Url` — an address that is already the
+//      current entry replaces that entry rather than adding a second.
 //
 // None of that belongs in a library that is not htmx.
 
@@ -52,6 +53,14 @@
 	const carriesHtmx = (root) =>
 		root instanceof Element && (root.matches(HX_MARKUP) || root.querySelector(HX_MARKUP));
 
+	// Whether an address is the history entry the page already stands on: path
+	// and query, the fragment not compared. The same check http-aware.js makes
+	// for a whole-document reply. Scoped to this file, not global.
+	function isCurrentHistoryEntry(url) {
+		const u = new URL(url, location.href);
+		return u.pathname + u.search === location.pathname + location.search;
+	}
+
 	// 4 — wire up swapped content, and honour the push-url header.
 	document.addEventListener('http-aware:swapped', (event) => {
 		const { swapRoot, oobTargets = [], response } = event.detail || {};
@@ -65,7 +74,13 @@
 			}
 		}
 
+		// A push of the address already current adds a second entry for the
+		// same page, and Back then stays on it. That write replaces the entry
+		// instead, so the entry still carries the state written.
 		const pushUrl = response?.headers?.get('HX-Push-Url');
-		if (pushUrl && pushUrl !== 'false') history.pushState({}, '', pushUrl);
+		if (pushUrl && pushUrl !== 'false') {
+			if (isCurrentHistoryEntry(pushUrl)) history.replaceState({}, '', pushUrl);
+			else history.pushState({}, '', pushUrl);
+		}
 	});
 })();

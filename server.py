@@ -76,7 +76,7 @@ class RequestValidator(BaseHTTPRequestHandler):
 		self.send_header('Access-Control-Allow-Origin', '*')
 		self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
 		self.send_header('Access-Control-Allow-Headers', '*')
-		self.send_header('Access-Control-Expose-Headers', 'Content-Range, Link')
+		self.send_header('Access-Control-Expose-Headers', 'Content-Range, Link, HX-Push-Url')
 
 	def do_OPTIONS(self):
 		self.send_response(200)
@@ -84,6 +84,8 @@ class RequestValidator(BaseHTTPRequestHandler):
 		self.end_headers()
 
 	def do_GET(self):
+		if urlparse(self.path).path == '/push':
+			return self.answer_push()
 		passed = self.log_request_details()
 
 		self.send_response(206 if passed else 400)
@@ -108,6 +110,21 @@ class RequestValidator(BaseHTTPRequestHandler):
 			</div>
 			'''
 		self.wfile.write(response.encode())
+
+	def answer_push(self):
+		# /push?push=<address> is answered 200 with HX-Push-Url naming that
+		# address, so a case can ask for a history write of an address it chose
+		# (the page's own, or another). It carries no Prefer or Range to check.
+		address = parse_qs(urlparse(self.path).query).get('push', [''])[0]
+		print(f"\n[PUSH] GET {self.path}\n  HX-Push-Url: {address}\n")
+
+		self.send_response(200)
+		self.send_cors_headers()
+		self.send_header('Content-Type', 'text/html')
+		if address:
+			self.send_header('HX-Push-Url', address)
+		self.end_headers()
+		self.wfile.write(f'<p>HX-Push-Url: {html.escape(address)}</p>'.encode())
 
 	def do_PATCH(self):
 		# A PATCH is answered with the body it carried. The reply is 2xx, so the

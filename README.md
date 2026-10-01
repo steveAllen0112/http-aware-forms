@@ -163,6 +163,8 @@ HTML cannot build one form value out of several controls — an operator and its
 
 Without a `target`, every method navigates to the response, just as a native form does. With one, the reply is swapped into the page instead — see [Targeting the Response](#targeting-the-response).
 
+An HTML reply that was not redirected is written into the window, and its address into the history. When that address is already the current entry — the same path and query, whatever the fragment — the entry is replaced rather than a second one added, so Back leaves the page instead of staying on it.
+
 ### An action's own query
 
 A native GET form throws away any query its `action` already carries and writes the form data in its place. HTTP-Aware Forms does that only when the action is empty or absent — the platform's own case, where the form submits to the page's current address and that address's query is the previous submission's.
@@ -320,7 +322,7 @@ The core knows nothing about any other library. If a page runs htmx too — usua
 <script src="http-aware-htmx.js"></script>
 ```
 
-It teaches http-aware to recognise `hx-swap-oob` as an out-of-band marker, to honour `HX-Retarget`, `HX-Reswap` and `HX-Push-Url`, to send `HX-Request: true` on partial requests and `HX-Current-URL` (the page's own address, as htmx sends it) on every request, and to run `htmx.process` over freshly-swapped markup so `hx-*` inside it goes live.
+It teaches http-aware to recognise `hx-swap-oob` as an out-of-band marker, to honour `HX-Retarget`, `HX-Reswap` and `HX-Push-Url`, to send `HX-Request: true` on partial requests and `HX-Current-URL` (the page's own address, as htmx sends it) on every request, and to run `htmx.process` over freshly-swapped markup so `hx-*` inside it goes live. An `HX-Push-Url` naming the current entry replaces that entry, as above, rather than adding a second.
 
 ## Extending it
 

@@ -473,6 +473,62 @@
 					}
 				}
 			]
+		},
+		{
+			"id": "htmx_push_url_of_the_current_address_replaces_the_entry",
+			"description": "With http-aware-htmx.js loaded, an HX-Push-Url naming the current address replaces the current entry: history gains no entry, so Back leaves the page",
+			"interop": "http-aware-htmx.js",
+			"page_query": "?at=here",
+			"form": "push",
+			"form_state": {
+				"push": "/index-standalone.html?at=here"
+			},
+			"expected_request": {
+				"history_added": 0,
+				"location": "http://localhost:8000/index-standalone.html?at=here",
+				"history_state": {}
+			}
+		},
+		{
+			"id": "htmx_push_url_of_another_address_adds_an_entry",
+			"description": "With http-aware-htmx.js loaded, an HX-Push-Url naming another address adds one entry, so Back returns to the page",
+			"interop": "http-aware-htmx.js",
+			"page_query": "?at=here",
+			"form": "push",
+			"form_state": {
+				"push": "/index-standalone.html?at=there"
+			},
+			"expected_request": {
+				"history_added": 1,
+				"location": "http://localhost:8000/index-standalone.html?at=there",
+				"history_state": {}
+			}
+		},
+		{
+			"id": "whole_document_at_the_current_address_replaces_the_entry",
+			"description": "With no target, an HTML reply from the current address is written into the window and replaces the current entry: history gains no entry",
+			"page_query": "?at=here",
+			"form": "whole",
+			"form_state": {
+				"at": "here"
+			},
+			"expected_request": {
+				"history_added": 0,
+				"location": "http://localhost:8000/index-standalone.html?at=here"
+			}
+		},
+		{
+			"id": "whole_document_at_another_address_adds_an_entry",
+			"description": "With no target, an HTML reply from another address is written into the window and adds one entry for it",
+			"page_query": "?at=here",
+			"form": "whole",
+			"form_state": {
+				"at": "there"
+			},
+			"expected_request": {
+				"history_added": 1,
+				"location": "http://localhost:8000/index-standalone.html?at=there"
+			}
 		}
 	],
 	"header_format_spec": {

@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v3.3.1 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v3.3.2 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([
@@ -1058,7 +1058,18 @@ class HTTPAwareForm extends HTMLFormElement {
 		if (!response.redirected && (response.headers.get('content-type') || '').includes('text/html')) {
 			const w = (target === '_blank') ? window.open('', '_blank').document : document;
 
-			w.open().write(await response.text()); w.close(); if (target!=='_blank') history.pushState(null, '', response.url);
+			w.open().write(await response.text()); w.close();
+			// The window now holds the reply, so its address goes in the history.
+			// A push of the address already current adds a second entry for the
+			// same page, and Back then stays on it, so that write replaces the
+			// entry instead. Path and query decide; the fragment is not compared.
+			// The check is local, not a global function: this is a classic
+			// script, and a page may declare an isCurrentHistoryEntry of its own.
+			if (target !== '_blank') {
+				const u = new URL(response.url, location.href);
+				if (u.pathname + u.search === location.pathname + location.search) history.replaceState(null, '', response.url);
+				else history.pushState(null, '', response.url);
+			}
 		} else if (target === '_blank') window.open(response.url);
 		else location.href = response.url;
 	}

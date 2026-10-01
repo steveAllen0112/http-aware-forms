@@ -42,10 +42,16 @@ async function runTests() {
 			console.log('Bundled browser missing — falling back to system Chrome.');
 			browser = await chromium.launch({ headless: true, channel: 'chrome' });
 		}
-		const page = await browser.newPage();
+		const shared = await browser.newPage();
 
 		for (const tc of spec.test_cases) {
 			console.log(`\nRunning: ${tc.id} - ${tc.description}`);
+
+			// A case that counts history entries runs in a tab of its own. Chromium
+			// caps a tab's history at 50 entries, and once the shared tab reaches
+			// the cap a push drops the oldest entry and history.length stays put.
+			const countsHistory = (tc.steps || [tc]).some(s => s.expected_request?.history_added !== undefined);
+			const page = countsHistory ? await browser.newPage() : shared;
 
 			// Capture the request
 			let captured = {};
@@ -135,6 +141,7 @@ async function runTests() {
 
 				// Submit
 				captured = {};
+				const historyBefore = await page.evaluate(() => history.length);
 				await page.click(`#${form} button[type="submit"]`);
 				await page.waitForTimeout(1000);
 
@@ -168,6 +175,32 @@ async function runTests() {
 					const got = await page.locator(sel).count();
 					if (got !== want) {
 						errors.push(`${at}DOM ${sel}: ${got} element(s), expected ${want}`);
+						passed = false;
+					}
+				}
+
+				// Check what the submission wrote to the browser's history:
+				// history_added is how many entries it added, location the page's
+				// address afterwards, history_state the state the current entry holds
+				// — which tells a replaced entry from one left alone.
+				if (expected.history_added !== undefined) {
+					const added = await page.evaluate(() => history.length) - historyBefore;
+					if (added !== expected.history_added) {
+						errors.push(`${at}History length changed by ${added}, expected ${expected.history_added}`);
+						passed = false;
+					}
+				}
+				if (expected.location !== undefined) {
+					const href = await page.evaluate(() => location.href);
+					if (href !== expected.location) {
+						errors.push(`${at}Location is '${href}', expected '${expected.location}'`);
+						passed = false;
+					}
+				}
+				if (expected.history_state !== undefined) {
+					const state = await page.evaluate(() => JSON.stringify(history.state));
+					if (state !== JSON.stringify(expected.history_state)) {
+						errors.push(`${at}History state is ${state}, expected ${JSON.stringify(expected.history_state)}`);
 						passed = false;
 					}
 				}
@@ -242,6 +275,7 @@ async function runTests() {
 			}
 
 			page.removeListener('request', handleRequest);
+			if (page !== shared) await page.close();
 		}
 
 		await browser.close();

@@ -356,6 +356,28 @@
 		<button type="submit">Save</button>
 	</form>
 	<output form="patch-refused" id="patch-refused-result"></output>
+
+	<h2>A history write of the current address</h2>
+	<p>
+		With <code>http-aware-htmx.js</code> loaded, a reply's <code>HX-Push-Url</code> is written
+		to the history. This server pushes whatever address it is asked for. An address that is
+		already the current entry replaces that entry; any other is added, so Back returns here.
+	</p>
+	<form is="http-aware" id="push" method="get"
+	      action="http://localhost:9999/push" target="#push-result">
+		<label>Push <input type="text" name="push"></label>
+		<button type="submit">Send</button>
+	</form>
+	<output form="push" id="push-result"></output>
+
+	<p>
+		With no target, an HTML reply is written into this window and its address into the
+		history. This form has no action, so it fetches this page at the query it sends.
+	</p>
+	<form is="http-aware" id="whole" method="get">
+		<label>At <input type="text" name="at"></label>
+		<button type="submit">Send</button>
+	</form>
 </main>
 
 <script src="http-aware.js"></script>

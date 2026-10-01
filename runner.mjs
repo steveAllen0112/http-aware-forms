@@ -57,6 +57,7 @@ async function runTests() {
 					captured.method = request.method();
 					captured.url = request.url();
 					captured.headers = request.headers();
+					captured.body = request.postData() || '';
 				}
 			};
 
@@ -71,118 +72,148 @@ async function runTests() {
 			// onto the page first; the add-on registers its hooks as it loads.
 			if (tc.interop) await page.addScriptTag({ url: `http://localhost:8000/${tc.interop}` });
 
-			// Set form values
-			const fs = tc.form_state;
-
-			await page.fill('input[name="page"]', fs.page || '1');
-			await page.selectOption('select[name="per"]', fs.per || '25');
-
-			const view = fs.view || 'list';
-			await page.click(`input[name="view"][value="${view}"]`);
-
-			// Set wait preference (for append semantics test)
-			if (fs.wait) {
-				await page.selectOption('select[name="wait"]', fs.wait);
-			} else {
-				await page.selectOption('select[name="wait"]', '');
-			}
-
-			// Set replace semantics test fields
-			await page.fill('input[name="first"]', fs.first || 'aaa');
-			await page.fill('input[name="second"]', fs.second || 'bbb');
-
-			// Set filter fields
-			if (fs.status) {
-				await page.selectOption('select[name="status"]', fs.status);
-			}
-			if (fs.q) {
-				await page.fill('input[name="q"]', fs.q);
-			}
-
-			// Any field the block above does not know about: set it generically,
-			// so a new test case can introduce new controls without editing the
-			// runner. The known fields keep their explicit defaults above,
-			// because existing cases depend on a missing key meaning "default".
 			// `form` names the form a case submits (default: the demo form), and
 			// every generic field is looked up inside it, so two forms may use the
 			// same control name without a case reaching into the wrong one.
 			const form = tc.form || 'demo';
-			const known = ['page', 'per', 'view', 'wait', 'first', 'second', 'status', 'q'];
-			for (const [name, value] of Object.entries(fs)) {
-				if (known.includes(name)) continue;
-				const sel = `#${form} [name="${name}"]`;
-				const tag = await page.$eval(sel, (el) => el.tagName).catch(() => null);
-				if (tag === 'SELECT') await page.selectOption(sel, value);
-				else if (tag) await page.fill(sel, value);
-				else console.log(`  [warn] no control named ${name}`);
-			}
-			// Checkboxes and radios, by selector: { "<selector>": true | false }.
-			for (const [sel, on] of Object.entries(tc.checks || {})) {
-				await page.setChecked(sel, on);
-			}
-
-			// Submit
-			captured = {};
-			await page.click(`#${form} button[type="submit"]`);
-			await page.waitForTimeout(1000);
-
-			// Validate
-			const expected = tc.expected_request;
 			let passed = true;
 			const errors = [];
 
-			// Check headers
-			if (expected.headers) {
-				for (const [header, expectedVal] of Object.entries(expected.headers)) {
-					const actualVal = captured.headers?.[header.toLowerCase()] || '';
-					if (actualVal !== expectedVal.toLowerCase()) {
-						errors.push(`Header ${header}: got '${actualVal}', expected '${expectedVal.toLowerCase()}'`);
+			// A case is one submission, or `steps`: several made in turn on the one
+			// loaded page, each with its own form_state, checks and expected_request
+			// — for a case whose point is what an earlier submission left behind.
+			const steps = tc.steps || [tc];
+			for (const [index, step] of steps.entries()) {
+				const at = steps.length > 1 ? `Step ${index + 1}: ` : '';
+
+				// Set form values
+				const fs = step.form_state || {};
+
+				await page.fill('input[name="page"]', fs.page || '1');
+				await page.selectOption('select[name="per"]', fs.per || '25');
+
+				const view = fs.view || 'list';
+				await page.click(`input[name="view"][value="${view}"]`);
+
+				// Set wait preference (for append semantics test)
+				if (fs.wait) {
+					await page.selectOption('select[name="wait"]', fs.wait);
+				} else {
+					await page.selectOption('select[name="wait"]', '');
+				}
+
+				// Set replace semantics test fields
+				await page.fill('input[name="first"]', fs.first || 'aaa');
+				await page.fill('input[name="second"]', fs.second || 'bbb');
+
+				// Set filter fields
+				if (fs.status) {
+					await page.selectOption('select[name="status"]', fs.status);
+				}
+				if (fs.q) {
+					await page.fill('input[name="q"]', fs.q);
+				}
+
+				// Any field the block above does not know about: set it generically,
+				// so a new test case can introduce new controls without editing the
+				// runner. The known fields keep their explicit defaults above,
+				// because existing cases depend on a missing key meaning "default".
+				// A select takes a value or a list of them; an empty list clears it.
+				const known = ['page', 'per', 'view', 'wait', 'first', 'second', 'status', 'q'];
+				for (const [name, value] of Object.entries(fs)) {
+					if (known.includes(name)) continue;
+					const sel = `#${form} [name="${name}"]`;
+					const tag = await page.$eval(sel, (el) => el.tagName).catch(() => null);
+					if (tag === 'SELECT') await page.selectOption(sel, value);
+					else if (tag) await page.fill(sel, value);
+					else console.log(`  [warn] no control named ${name}`);
+				}
+				// Checkboxes and radios, by selector: { "<selector>": true | false }.
+				for (const [sel, on] of Object.entries(step.checks || {})) {
+					await page.setChecked(sel, on);
+				}
+
+				// Submit
+				captured = {};
+				await page.click(`#${form} button[type="submit"]`);
+				await page.waitForTimeout(1000);
+
+				// Validate
+				const expected = step.expected_request;
+
+				// Check headers
+				if (expected.headers) {
+					for (const [header, expectedVal] of Object.entries(expected.headers)) {
+						const actualVal = captured.headers?.[header.toLowerCase()] || '';
+						if (actualVal !== expectedVal.toLowerCase()) {
+							errors.push(`${at}Header ${header}: got '${actualVal}', expected '${expectedVal.toLowerCase()}'`);
+							passed = false;
+						}
+					}
+				}
+
+				// Parse the captured URL
+				const actualUrl = captured.url || '';
+				let queryString = '';
+				try {
+					const parsed = new URL(actualUrl);
+					queryString = parsed.search.slice(1); // Remove leading ?
+				} catch (e) {
+					// URL parsing failed
+				}
+
+				// Check dom_counts: { "<selector>": <count> } after the swap — for a case whose
+				// point is where the response landed rather than what was requested.
+				for (const [sel, want] of Object.entries(expected.dom_counts || {})) {
+					const got = await page.locator(sel).count();
+					if (got !== want) {
+						errors.push(`${at}DOM ${sel}: ${got} element(s), expected ${want}`);
 						passed = false;
 					}
 				}
-			}
 
-			// Parse the captured URL
-			const actualUrl = captured.url || '';
-			let queryString = '';
-			try {
-				const parsed = new URL(actualUrl);
-				queryString = parsed.search.slice(1); // Remove leading ?
-			} catch (e) {
-				// URL parsing failed
-			}
-
-			// Check dom_counts: { "<selector>": <count> } after the swap — for a case whose
-			// point is where the response landed rather than what was requested.
-			for (const [sel, want] of Object.entries(expected.dom_counts || {})) {
-				const got = await page.locator(sel).count();
-				if (got !== want) {
-					errors.push(`DOM ${sel}: ${got} element(s), expected ${want}`);
+				// Check query_exact: the whole query, byte for byte and in order.
+				if (expected.query_exact !== undefined && queryString !== expected.query_exact) {
+					errors.push(`${at}Query is '${queryString}', expected exactly '${expected.query_exact}'`);
 					passed = false;
 				}
-			}
 
-			// Check query_exact: the whole query, byte for byte and in order.
-			if (expected.query_exact !== undefined && queryString !== expected.query_exact) {
-				errors.push(`Query is '${queryString}', expected exactly '${expected.query_exact}'`);
-				passed = false;
-			}
+				// Check query_must_contain
+				if (expected.query_must_contain) {
+					for (const mustHave of expected.query_must_contain) {
+						if (!queryString.includes(mustHave)) {
+							errors.push(`${at}Query missing '${mustHave}' in: ${queryString}`);
+							passed = false;
+						}
+					}
+				}
 
-			// Check query_must_contain
-			if (expected.query_must_contain) {
-				for (const mustHave of expected.query_must_contain) {
-					if (!queryString.includes(mustHave)) {
-						errors.push(`Query missing '${mustHave}' in: ${queryString}`);
+				// Check query_must_not_contain
+				if (expected.query_must_not_contain) {
+					for (const mustNotHave of expected.query_must_not_contain) {
+						if (queryString.includes(mustNotHave)) {
+							errors.push(`${at}Query contains forbidden '${mustNotHave}' in: ${queryString}`);
+							passed = false;
+						}
+					}
+				}
+
+				// Check the request body, as sent: body_exact is the whole of it, byte
+				// for byte and in order; the other two look for a pair within it.
+				const body = captured.body || '';
+				if (expected.body_exact !== undefined && body !== expected.body_exact) {
+					errors.push(`${at}Body is '${body}', expected exactly '${expected.body_exact}'`);
+					passed = false;
+				}
+				for (const mustHave of expected.body_must_contain || []) {
+					if (!body.includes(mustHave)) {
+						errors.push(`${at}Body missing '${mustHave}' in: ${body}`);
 						passed = false;
 					}
 				}
-			}
-
-			// Check query_must_not_contain
-			if (expected.query_must_not_contain) {
-				for (const mustNotHave of expected.query_must_not_contain) {
-					if (queryString.includes(mustNotHave)) {
-						errors.push(`Query contains forbidden '${mustNotHave}' in: ${queryString}`);
+				for (const mustNotHave of expected.body_must_not_contain || []) {
+					if (body.includes(mustNotHave)) {
+						errors.push(`${at}Body contains forbidden '${mustNotHave}' in: ${body}`);
 						passed = false;
 					}
 				}
@@ -193,16 +224,18 @@ async function runTests() {
 				passed,
 				errors,
 				captured: {
-					url: actualUrl,
-					headers: captured.headers || {}
+					url: captured.url || '',
+					headers: captured.headers || {},
+					body: captured.body || ''
 				}
 			});
 
 			const statusStr = passed ? '[OK] PASS' : '[X] FAIL';
 			console.log(`  ${statusStr}`);
 			if (!passed) {
-				console.log(`    URL: ${actualUrl}`);
+				console.log(`    URL: ${captured.url || ''}`);
 				console.log(`    Headers: Prefer=${captured.headers?.prefer || 'MISSING'}, Range=${captured.headers?.range || 'MISSING'}`);
+				console.log(`    Body: ${captured.body || ''}`);
 			}
 			for (const e of errors) {
 				console.log(`    ${e}`);
@@ -232,6 +265,7 @@ async function runTests() {
 			console.log(`\n  ${f.id}:`);
 			console.log(`    URL: ${f.captured.url}`);
 			console.log(`    Headers:`, f.captured.headers);
+			console.log(`    Body: ${f.captured.body}`);
 			for (const e of f.errors) {
 				console.log(`    - ${e}`);
 			}

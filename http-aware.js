@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v3.3.0 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v3.3.1 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([
@@ -381,11 +381,13 @@ class HTTPAwareForm extends HTMLFormElement {
 			if (sName && formData.getAll(sName).length > 1) {
 				formData.set(sName, this._submitter.value);
 			}
-			for (const name of this.getHeaderBoundFields()) formData.delete(name);
+			const headerBound = this.getHeaderBoundFields();
+			for (const name of headerBound) formData.delete(name);
 
 			// A query-param fieldset's controls are its template's variables:
 			// they leave the entry list, and the pair they compose joins it.
-			for (const name of this.getComposedFields()) formData.delete(name);
+			const variables = this.getComposedFields();
+			for (const name of variables) formData.delete(name);
 			const composed = [];
 			for (const qp of this._queryParams()) {
 				const pair = qp.computePair(this._wireName(qp, qp.key));
@@ -400,7 +402,9 @@ class HTTPAwareForm extends HTMLFormElement {
 			// the default natively via defaultValue / defaultChecked /
 			// defaultSelected, so there is no shadow state to maintain — after a
 			// successful PATCH the swapped-in partial replaces the controls and
-			// the new wire values become the new defaults automatically.
+			// the new wire values become the new defaults automatically. A
+			// control outside the swap target is not replaced, so its default is
+			// promoted to what was sent instead — see _promoteDefaults.
 			// RFC 5789: PATCH bodies describe deltas, not the full resource.
 			// Raw getAttribute (not the formMethod IDL property): the IDL property
 			// is spec-defined as "limited to only known values" and normalizes
@@ -408,6 +412,7 @@ class HTTPAwareForm extends HTMLFormElement {
 			// "get" — so submitter.formMethod on <button formmethod="PATCH"> would
 			// silently return "get". getAttribute returns the raw string.
 			const method = (this._submitter?.getAttribute('formmethod') || this.getAttribute('method') || 'GET').toUpperCase();
+			let sent = null;
 			if (method === 'PATCH') {
 				const dirtyByName = new Map();
 				for (const el of this.elements) {
@@ -434,11 +439,29 @@ class HTTPAwareForm extends HTMLFormElement {
 					if (name === submitterName) continue;
 					if (!dirtyByName.has(name)) formData.delete(name);
 				}
+				// A cleared control puts nothing on the wire. The browser omits an
+				// unchecked box, a group whose boxes are all unchecked, and a
+				// multi-select with nothing selected, so a box rendered checked and
+				// then unchecked is dirty yet says nothing, and the body could never
+				// state that the field is now off. A dirty name with no entry left
+				// is sent with the empty value instead: "changed, and now empty".
+				// The name is the wire name (this runs inside the rename window).
+				// A header-bound name and a composed pair's variable are kept out
+				// of the body on purpose and stay out; a control disabled by its
+				// fieldset submits nothing, as FormData has it.
+				for (const [name, els] of dirtyByName) {
+					if (headerBound.has(name) || variables.has(name) || formData.has(name)) continue;
+					if (els.some(el => !el.matches(':disabled'))) formData.append(name, '');
+				}
+				sent = this._sentControls(formData, composed);
 			}
 			// Names actually on the wire — the response-side morph lets the server
 			// echo win for exactly these fields (a clamped/quantized commit must
 			// display), while other dirty fields keep their unsubmitted edits.
 			this._lastSubmittedNames = new Set(formData.keys());
+			// What each control was sent as, for _promoteDefaults once the server
+			// has accepted it. Null outside PATCH: only PATCH reads dirtiness.
+			this._sent = sent;
 			// Read inside the rename window, so a namespaced control owns its
 			// WIRE name — the one the query merge in buildRequest compares.
 			this._ownedKeys = this._ownedQueryKeys();
@@ -523,6 +546,60 @@ class HTTPAwareForm extends HTMLFormElement {
 			return el.value !== el.defaultValue;
 		}
 		return false;
+	}
+
+	/**
+	 * The controls a PATCH body speaks for, each with the state it was sent
+	 * in: every enabled control whose name is on the wire — the body states
+	 * the whole of a name, so an unchanged box beside a changed one is stated
+	 * too — and the variables of every composed pair on the wire. Read inside
+	 * the rename window, where a control's name is its wire name. A file
+	 * input is left out: its default is not the file it carries.
+	 */
+	_sentControls(formData, composed) {
+		const controls = new Set();
+		const speaks = el => ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)
+			&& el.type !== 'file' && !el.matches(':disabled');
+		for (const el of this.elements) {
+			if (el.name && formData.has(el.name) && speaks(el)) controls.add(el);
+		}
+		for (const [key, qp] of composed) {
+			if (formData.has(key)) for (const el of qp.inputs) if (speaks(el)) controls.add(el);
+		}
+		return [...controls].map(el => [el,
+			el.type === 'checkbox' || el.type === 'radio' ? el.checked
+				: el.tagName === 'SELECT' ? [...el.options].map(o => [o, o.selected])
+				: el.value]);
+	}
+
+	/**
+	 * After a 2xx PATCH, what was sent is what the server holds, so it becomes
+	 * each sent control's default. A control inside the swap target is
+	 * replaced (or morphed) and takes the server's new default anyway; one
+	 * outside it is not, and without this it keeps the default it was first
+	 * rendered with — so a box rendered unchecked, checked and sent, then
+	 * unchecked again, matches that stale default, is not dirty, and the
+	 * second change is never sent. The default takes the state AT SEND, not
+	 * the current one: an edit made while the request was in flight still
+	 * differs from it, and stays dirty for the next submission. Applied
+	 * before the response is swapped, so the swap finds these controls clean
+	 * and the server's render of them wins. A control that left the document
+	 * in the meantime is skipped; a non-2xx promotes nothing, so the control
+	 * stays dirty and is sent again.
+	 */
+	static _promoteDefaults(sent) {
+		for (const [el, state] of sent || []) {
+			if (!el.isConnected) continue;
+			if (el.type === 'checkbox' || el.type === 'radio') {
+				if (el.defaultChecked !== state) el.defaultChecked = state;
+			} else if (el.tagName === 'SELECT') {
+				for (const [opt, selected] of state) {
+					if (opt.defaultSelected !== selected) opt.defaultSelected = selected;
+				}
+			} else if (el.defaultValue !== state) {
+				el.defaultValue = state;
+			}
+		}
 	}
 
 	/**
@@ -993,9 +1070,13 @@ class HTTPAwareForm extends HTMLFormElement {
 
 	submit() {
 		const request = this.buildRequest();
+		const sent = this._sent;
 		const t = this.effectiveTarget;
 		fetch(request)
-			.then(res => t ? this.swapResponse(res) : this.navigateWithResponse(res, request.method, this.target || '_self'))
+			.then(res => {
+				if (res.ok) HTTPAwareForm._promoteDefaults(sent);
+				return t ? this.swapResponse(res) : this.navigateWithResponse(res, request.method, this.target || '_self');
+			})
 			.catch(err => this.handleError(err));
 	}
 
@@ -1050,6 +1131,8 @@ class HTTPAwareForm extends HTMLFormElement {
 		if (shouldValidate && !this.checkValidity()) { this.reportValidity(); return; }
 
 		this.preparedRequest = this.buildRequest();
+		// Held with the request it describes: the next submission replaces _sent.
+		const sent = this._sent;
 		const t = this.effectiveTarget;
 
 		// We intentionally do NOT dispatch a synthetic submit event here.
@@ -1070,7 +1153,11 @@ class HTTPAwareForm extends HTMLFormElement {
 
 		const method = this.preparedRequest.method;
 		fetch(this.preparedRequest, { signal: this._abortController.signal })
-			.then(res => t ? this.swapResponse(res) : this.navigateWithResponse(res, method, this.target || '_self'))
+			.then(res => {
+				// A 2xx means the server took what was sent — before the swap.
+				if (res.ok) HTTPAwareForm._promoteDefaults(sent);
+				return t ? this.swapResponse(res) : this.navigateWithResponse(res, method, this.target || '_self');
+			})
 			.catch(err => { if (err.name !== 'AbortError') this.handleError(err); });
 		this.preparedRequest = null;
 	}

@@ -5,6 +5,7 @@ Logs PASS/FAIL for each request with detailed header inspection.
 """
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+import html
 import json
 import re
 import sys
@@ -73,7 +74,7 @@ class RequestValidator(BaseHTTPRequestHandler):
 
 	def send_cors_headers(self):
 		self.send_header('Access-Control-Allow-Origin', '*')
-		self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+		self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
 		self.send_header('Access-Control-Allow-Headers', '*')
 		self.send_header('Access-Control-Expose-Headers', 'Content-Range, Link')
 
@@ -107,6 +108,24 @@ class RequestValidator(BaseHTTPRequestHandler):
 			</div>
 			'''
 		self.wfile.write(response.encode())
+
+	def do_PATCH(self):
+		# A PATCH is answered with the body it carried. The reply is 2xx, so the
+		# form takes what it sent as accepted, unless the path asks for a refusal
+		# (/refuse), which is answered 409 so a case can show nothing was taken.
+		length = int(self.headers.get('Content-Length') or 0)
+		body = self.rfile.read(length).decode('utf-8', 'replace')
+		refused = urlparse(self.path).path == '/refuse'
+		print(f"\n[{'REFUSED' if refused else 'ACCEPTED'}] PATCH {self.path}\n  body: {body}\n")
+
+		self.send_response(409 if refused else 200)
+		self.send_cors_headers()
+		self.send_header('Content-Type', 'text/plain' if refused else 'text/html')
+		self.end_headers()
+		if refused:
+			self.wfile.write(b'refused')
+		else:
+			self.wfile.write(f'<p>PATCH {html.escape(self.path)}: {html.escape(body)}</p>'.encode())
 
 if __name__ == '__main__':
 	port = int(sys.argv[1]) if len(sys.argv) > 1 else 9999

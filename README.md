@@ -216,7 +216,9 @@ RFC 5789 says a PATCH body describes a delta, not the whole resource. Set `metho
 </form>
 ```
 
-The browser tracks the default natively through `defaultValue`, `defaultChecked` and `defaultSelected`, so there is no shadow copy to keep in step: after a successful PATCH the swapped-in markup carries new defaults and dirtiness resets by itself.
+The browser tracks the default natively through `defaultValue`, `defaultChecked` and `defaultSelected`, so there is no shadow copy to keep in step: after a successful PATCH the swapped-in markup carries new defaults and dirtiness resets by itself. A control outside the swap target is not re-rendered, so on a 2xx reply the state it was sent in becomes its default instead. An edit made while the request was in flight still differs from that state and stays dirty; a reply that is not 2xx changes no default, and the change is sent again next time.
+
+A cleared control is sent as its name with an empty value. The browser leaves an unchecked box out of the form data altogether — and a group whose boxes are all unchecked, and a multi-select with nothing selected — so a box rendered checked and then unchecked would otherwise put nothing on the wire, and the PATCH could not say that the field is now off. A field bound to a header, and a variable of a composed pair, stay out of the body as before.
 
 The submitter's own name and value are always sent, dirty or not — it states the intent.
 

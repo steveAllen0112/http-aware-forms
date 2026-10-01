@@ -314,6 +314,48 @@
 		<button type="submit">Send</button>
 	</form>
 	<output form="self" id="self-result"></output>
+
+	<h2>A dirty-only PATCH</h2>
+	<p>
+		A PATCH body carries only what changed. A control the browser leaves out when it is
+		empty — an unchecked box, a multi-select with nothing chosen — is sent as its name with
+		an empty value, so the body can say the field was cleared. The reply lands outside the
+		form, so its controls are never re-rendered: once the server accepts a change, what was
+		sent becomes each control's default, and the next change is measured from there.
+	</p>
+	<form is="http-aware" id="patch" method="patch"
+	      action="http://localhost:9999/companies/42" target="#patch-result">
+		<label><input type="checkbox" name="active" value="yes" checked> Active</label>
+		<label><input type="checkbox" name="notify" value="yes"> Notify</label>
+		<label>Tags
+			<select name="tags" multiple>
+				<option value="a" selected>A</option>
+				<option value="b" selected>B</option>
+				<option value="c">C</option>
+			</select>
+		</label>
+		<fieldset is="name-space" name="prefs">
+			<label><input type="checkbox" name="digest" value="weekly" checked> Weekly digest</label>
+		</fieldset>
+		<fieldset is="request-header" header="If-Match" value="{etag}">
+			<label>Version <input type="text" name="etag" value="v1"></label>
+		</fieldset>
+		<fieldset is="query-param" name="cap" value="lte.{limit}">
+			<label>Limit <input type="number" name="limit" value="10"></label>
+		</fieldset>
+		<button type="submit">Save</button>
+	</form>
+	<output form="patch" id="patch-result"></output>
+
+	<p>
+		A refused PATCH promotes nothing: the change is still a change, and is sent again.
+	</p>
+	<form is="http-aware" id="patch-refused" method="patch"
+	      action="http://localhost:9999/refuse" target="#patch-refused-result">
+		<label><input type="checkbox" name="notify" value="yes"> Notify</label>
+		<button type="submit">Save</button>
+	</form>
+	<output form="patch-refused" id="patch-refused-result"></output>
 </main>
 
 <script src="http-aware.js"></script>

@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v3.4.0 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v3.4.1 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([
@@ -213,7 +213,8 @@ class HTTPAwareForm extends HTMLFormElement {
 	 * fires `change` on blur-after-edit, on Enter in a text field, and on
 	 * select/checkbox/radio/slider commit — with NO submit mid-typing, so
 	 * an out-of-band re-render never races an input
-	 * the user is still inside.
+	 * the user is still inside. On a PATCH form an autosubmit is sent only
+	 * when something has changed (_autoSubmit).
 	 *
 	 * Duration syntax: bare integer = milliseconds (canonical: `debounce="300"`).
 	 * Suffixed forms `"300ms"` / `"0.5s"` / `"2s"` also accepted for readability
@@ -262,14 +263,48 @@ class HTTPAwareForm extends HTMLFormElement {
 		const existing = this._debounceTimers.get(el);
 		if (existing) clearTimeout(existing);
 		if (!(ms > 0)) {
-			this.requestSubmit();
+			this._autoSubmit();
 			return;
 		}
 		const t = setTimeout(() => {
 			this._debounceTimers.delete(el);
-			this.requestSubmit();
+			this._autoSubmit();
 		}, ms);
 		this._debounceTimers.set(el, t);
+	}
+
+	/**
+	 * An autosubmit, unless nothing has changed. A PATCH states only what
+	 * changed (RFC 5789), so a PATCH form each of whose controls holds what the
+	 * server last accepted, or what is already on its way to it, has nothing to
+	 * say and sends nothing. Such a `change` is ordinary: a script that commits
+	 * a typed value by firing its own `change` (a keyboard shortcut stepping a
+	 * quantity the person has typed) leaves the browser's own `change` to come
+	 * when focus leaves the control, after the value was sent. Every other
+	 * method sends the form whole, and there a value set back to what the server
+	 * rendered is a change (a filter returned to "all"), so it always sends.
+	 */
+	_autoSubmit() {
+		if (this._patchHasNoChange()) return;
+		this.requestSubmit();
+	}
+
+	/**
+	 * A PATCH form none of whose enabled controls differs from its baseline:
+	 * what the request on its way carries for it, else its default, which is
+	 * what the server last sent or accepted (_promoteDefaults).
+	 */
+	_patchHasNoChange() {
+		if ((this.getAttribute('method') || 'GET').toUpperCase() !== 'PATCH') return false;
+		const onItsWay = new Map(this._pending || []);
+		for (const el of this.elements) {
+			if (!el.name || el.matches(':disabled')) continue;
+			const changed = onItsWay.has(el)
+				? !HTTPAwareForm._sameState(HTTPAwareForm._stateOf(el), onItsWay.get(el))
+				: HTTPAwareForm._isDirty(el);
+			if (changed) return false;
+		}
+		return true;
 	}
 
 	static _parseDuration(s) {
@@ -593,10 +628,20 @@ class HTTPAwareForm extends HTMLFormElement {
 		for (const [key, qp] of composed) {
 			if (formData.has(key)) for (const el of qp.inputs) if (speaks(el)) controls.add(el);
 		}
-		return [...controls].map(el => [el,
-			el.type === 'checkbox' || el.type === 'radio' ? el.checked
-				: el.tagName === 'SELECT' ? [...el.options].map(o => [o, o.selected])
-				: el.value]);
+		return [...controls].map(el => [el, HTTPAwareForm._stateOf(el)]);
+	}
+
+	/** A control's state as sent: its checkedness, each option's selectedness, or its value. */
+	static _stateOf(el) {
+		return el.type === 'checkbox' || el.type === 'radio' ? el.checked
+			: el.tagName === 'SELECT' ? [...el.options].map(o => [o, o.selected])
+			: el.value;
+	}
+
+	static _sameState(a, b) {
+		if (!Array.isArray(a)) return a === b;
+		return Array.isArray(b) && a.length === b.length
+			&& a.every(([opt, selected], i) => b[i][0] === opt && b[i][1] === selected);
 	}
 
 	/**
@@ -1223,13 +1268,23 @@ class HTTPAwareForm extends HTMLFormElement {
 		}));
 
 		const method = this.preparedRequest.method;
-		fetch(this.preparedRequest, { signal: this._abortController.signal })
+		// What this request carries stays on record until its answer, so that an
+		// autosubmit of the same values meanwhile sends nothing (_autoSubmit). A
+		// later request replaces the record; an answer clears only its own.
+		const controller = this._abortController;
+		this._pending = sent;
+		const answered = () => { if (this._abortController === controller) this._pending = null; };
+		fetch(this.preparedRequest, { signal: controller.signal })
 			.then(res => {
 				// A 2xx means the server took what was sent — before the swap.
 				if (res.ok) HTTPAwareForm._promoteDefaults(sent);
+				answered();
 				return t ? this.swapResponse(res) : this.navigateWithResponse(res, method, this.target || '_self');
 			})
-			.catch(err => { if (err.name !== 'AbortError') this.handleError(err); });
+			.catch(err => {
+				answered();
+				if (err.name !== 'AbortError') this.handleError(err);
+			});
 		this.preparedRequest = null;
 	}
 

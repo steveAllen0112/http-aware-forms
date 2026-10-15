@@ -197,6 +197,31 @@ async function runTests() {
 					await page.setChecked(sel, on);
 				}
 
+				// `actions`, in order, after the step's fields are set:
+				//   { "step": "<selector>", "by": n }  focus the control, step it by n
+				//     from script (stepUp/stepDown) and dispatch a bubbling change, as
+				//     an application's keyboard shortcut does;
+				//   { "change": "<selector>" }  dispatch a bubbling change from script;
+				//   { "press": "<selector>", "key": "<key>" }  press a key in the control,
+				//     as a person does (Tab moves focus on, and the browser fires its own
+				//     change if the value differs from what it was when focus arrived);
+				//   { "wait": ms }.
+				for (const action of step.actions || []) {
+					if (action.step) {
+						await page.$eval(action.step, (el, by) => {
+							el.focus();
+							if (by > 0) el.stepUp(by); else el.stepDown(-by);
+							el.dispatchEvent(new Event('change', { bubbles: true }));
+						}, action.by);
+					} else if (action.change) {
+						await page.$eval(action.change, (el) => el.dispatchEvent(new Event('change', { bubbles: true })));
+					} else if (action.press) {
+						await page.press(action.press, action.key);
+					} else if (action.wait) {
+						await page.waitForTimeout(action.wait);
+					}
+				}
+
 				// Submit. A step with `"submit": false` clicks nothing: its own input
 				// is what submits the form (autosubmit).
 				const historyBefore = await page.evaluate(() => history.length);

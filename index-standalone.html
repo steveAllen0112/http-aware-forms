@@ -357,6 +357,23 @@
 	</form>
 	<output form="patch-refused" id="patch-refused-result"></output>
 
+	<p>
+		An autosubmit PATCH is sent only when something has changed: when a control differs
+		from what the server last accepted, and from what is already on its way to it. A
+		script that sets a value and fires its own <code>change</code> leaves the browser's
+		own <code>change</code> to come when focus leaves; that one has nothing to send.
+	</p>
+	<form is="http-aware" id="patch-auto" method="patch" autosubmit="change"
+	      action="http://localhost:9999/ok" target="#patch-auto-result">
+		<label>Quantity <input type="number" name="qty" value="2" min="1" max="99" step="1"></label>
+	</form>
+	<output form="patch-auto" id="patch-auto-result"></output>
+	<form is="http-aware" id="patch-auto-slow" method="patch" autosubmit="change"
+	      action="http://localhost:9999/slow" target="#patch-auto-slow-result">
+		<label>Quantity <input type="number" name="qty" value="2" min="1" max="99" step="1"></label>
+	</form>
+	<output form="patch-auto-slow" id="patch-auto-slow-result"></output>
+
 	<h2>A history write of the current address</h2>
 	<p>
 		With <code>http-aware-htmx.js</code> loaded, a reply's <code>HX-Push-Url</code> is written

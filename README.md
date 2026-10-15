@@ -285,6 +285,8 @@ An unmarked element whose id is already on the page, outside the target, is trea
 
 A button may override the delay for its own submission with `formdebounce`.
 
+On a PATCH form an autosubmit is sent only when something has changed: when a control differs from what the server last accepted, and from what a request already on its way carries. A `change` with nothing new sends nothing. That case is ordinary: a script that commits a typed value by firing its own `change` (a keyboard shortcut that steps a quantity the person has typed, say) leaves the browser to fire its own `change` when focus leaves the control, after the value has been sent. Every other method sends the form whole, and a value set back to what the server rendered is a change there (a filter returned to "all"), so an autosubmit of a GET, POST or PUT form always sends. A click on a submit button always sends. See `docs/decisions/ADR-2026.10.15.autosubmit-sends-only-a-change.md`.
+
 Both attributes are read when the form is connected to the page. A form is wired once, however often it is connected: moved about the page — by a `morph` swap, or by a script that reorders rows — it keeps one set of listeners, so one click is one request and one change is one request. When it returns to the page, `autosubmit` and `debounce` are read again, so a change made to them while the form was out of the page takes effect. See `docs/decisions/ADR-2026.10.14.wired-once-per-element.md`.
 
 ## Button Overrides (form* Attributes)

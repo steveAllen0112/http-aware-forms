@@ -691,6 +691,166 @@
 					"#oob-primary #oob-unmarked": 0
 				}
 			}
+		},
+		{
+			"id": "patch_autosubmit_scripted_step_then_leaving_sends_once",
+			"description": "An autosubmit PATCH whose quantity a script steps, firing its own change, sends once: leaving the box afterwards sends nothing, the server having accepted the value",
+			"form": "patch-auto",
+			"steps": [
+				{
+					"submit": false,
+					"actions": [
+						{
+							"step": "#patch-auto [name=\"qty\"]",
+							"by": 1
+						},
+						{
+							"wait": 300
+						},
+						{
+							"press": "#patch-auto [name=\"qty\"]",
+							"key": "Tab"
+						}
+					],
+					"expected_request": {
+						"requests": 1,
+						"body_exact": "qty=3"
+					}
+				}
+			]
+		},
+		{
+			"id": "patch_autosubmit_typed_value_and_scripted_change_then_leaving_sends_once",
+			"description": "An autosubmit PATCH whose quantity is typed and committed by a script's change sends once: the browser's own change when focus leaves sends nothing",
+			"form": "patch-auto",
+			"steps": [
+				{
+					"submit": false,
+					"form_state": {
+						"qty": "5"
+					},
+					"actions": [
+						{
+							"change": "#patch-auto [name=\"qty\"]"
+						},
+						{
+							"wait": 300
+						},
+						{
+							"press": "#patch-auto [name=\"qty\"]",
+							"key": "Tab"
+						}
+					],
+					"expected_request": {
+						"requests": 1,
+						"body_exact": "qty=5"
+					}
+				}
+			]
+		},
+		{
+			"id": "patch_autosubmit_typed_then_scripted_step_then_leaving_sends_once",
+			"description": "An autosubmit PATCH whose quantity is typed and then stepped by a script, firing its own change, sends once: leaving the box afterwards sends nothing",
+			"form": "patch-auto",
+			"steps": [
+				{
+					"submit": false,
+					"form_state": {
+						"qty": "5"
+					},
+					"actions": [
+						{
+							"step": "#patch-auto [name=\"qty\"]",
+							"by": 1
+						},
+						{
+							"wait": 300
+						},
+						{
+							"press": "#patch-auto [name=\"qty\"]",
+							"key": "Tab"
+						}
+					],
+					"expected_request": {
+						"requests": 1,
+						"body_exact": "qty=6"
+					}
+				}
+			]
+		},
+		{
+			"id": "patch_autosubmit_leaving_while_the_change_is_on_its_way_sends_once",
+			"description": "Leaving the box while the PATCH of a typed and stepped quantity is still on its way sends nothing more: that value is already being sent",
+			"form": "patch-auto-slow",
+			"steps": [
+				{
+					"submit": false,
+					"form_state": {
+						"qty": "5"
+					},
+					"actions": [
+						{
+							"step": "#patch-auto-slow [name=\"qty\"]",
+							"by": 1
+						},
+						{
+							"press": "#patch-auto-slow [name=\"qty\"]",
+							"key": "Tab"
+						}
+					],
+					"expected_request": {
+						"requests": 1,
+						"body_exact": "qty=6"
+					}
+				}
+			]
+		},
+		{
+			"id": "patch_autosubmit_value_set_back_is_sent",
+			"description": "After the server accepts a stepped quantity, stepping it back to the value first rendered is a change, and is sent",
+			"form": "patch-auto",
+			"steps": [
+				{
+					"submit": false,
+					"actions": [
+						{
+							"step": "#patch-auto [name=\"qty\"]",
+							"by": 1
+						},
+						{
+							"wait": 300
+						},
+						{
+							"press": "#patch-auto [name=\"qty\"]",
+							"key": "Tab"
+						}
+					],
+					"expected_request": {
+						"requests": 1,
+						"body_exact": "qty=3"
+					}
+				},
+				{
+					"submit": false,
+					"actions": [
+						{
+							"step": "#patch-auto [name=\"qty\"]",
+							"by": -1
+						},
+						{
+							"wait": 300
+						},
+						{
+							"press": "#patch-auto [name=\"qty\"]",
+							"key": "Tab"
+						}
+					],
+					"expected_request": {
+						"requests": 1,
+						"body_exact": "qty=2"
+					}
+				}
+			]
 		}
 	],
 	"header_format_spec": {

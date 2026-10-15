@@ -9,6 +9,7 @@ import html
 import json
 import re
 import sys
+import time
 
 # Load expectations
 EXPECTATIONS = {
@@ -166,9 +167,13 @@ class RequestValidator(BaseHTTPRequestHandler):
 		# A PATCH is answered with the body it carried. The reply is 2xx, so the
 		# form takes what it sent as accepted, unless the path asks for a refusal
 		# (/refuse), which is answered 409 so a case can show nothing was taken.
+		# /slow is answered half a second late, so a case can act while the
+		# request is on its way.
 		length = int(self.headers.get('Content-Length') or 0)
 		body = self.rfile.read(length).decode('utf-8', 'replace')
 		refused = urlparse(self.path).path == '/refuse'
+		if urlparse(self.path).path == '/slow':
+			time.sleep(0.5)
 		print(f"\n[{'REFUSED' if refused else 'ACCEPTED'}] PATCH {self.path}\n  body: {body}\n")
 
 		self.send_response(409 if refused else 200)

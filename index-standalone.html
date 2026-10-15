@@ -378,6 +378,52 @@
 		<label>At <input type="text" name="at"></label>
 		<button type="submit">Send</button>
 	</form>
+
+	<h2>A form that moves</h2>
+	<section id="moving">
+		<p>
+			A form is wired once, however often it is connected. Taken out of the page and put back,
+			or moved by a morph, it still sends one request for one click, and one for one change.
+		</p>
+		<form is="http-aware" id="moved-auto" method="get" autosubmit="change"
+		      action="http://localhost:9999/ok" target="#moved-result">
+			<label>Shade
+				<select name="shade">
+					<option value="light">Light</option>
+					<option value="dark">Dark</option>
+				</select>
+			</label>
+		</form>
+		<form is="http-aware" id="moved" method="get"
+		      action="http://localhost:9999/ok" target="#moved-result">
+			<button type="submit">Send</button>
+		</form>
+	</section>
+	<output id="moved-result"></output>
+
+	<h2>Out of band</h2>
+	<p>
+		An element the response marks with <code>data-swap-oob</code> goes to the element here that
+		carries its id, whether or not the server retargeted the swap. The marker's value is the
+		swap: <code>innerHTML</code> fills that element and keeps it, and anything else replaces it.
+		A marked element with nothing here to go to is dropped. An unmarked element whose id is on
+		the page is out of band only when the swap was not retargeted; under a retarget it is part
+		of the primary content.
+	</p>
+	<section id="oob-primary"><p class="stale">primary, old</p></section>
+	<section id="oob-outer"><p class="stale">outer, old</p></section>
+	<section id="oob-inner" class="shell"><p class="stale">inner, old</p></section>
+	<section id="oob-unmarked"><p class="stale">unmarked, old</p></section>
+	<form is="http-aware" id="oob-retarget" method="get"
+	      action="http://localhost:9999/oob" target="#oob-result">
+		<input type="hidden" name="retarget" value="#oob-primary">
+		<button type="submit">Send, retargeted to the primary section</button>
+	</form>
+	<output form="oob-retarget" id="oob-result"></output>
+	<form is="http-aware" id="oob-plain" method="get"
+	      action="http://localhost:9999/oob" target="#oob-primary">
+		<button type="submit">Send, not retargeted</button>
+	</form>
 </main>
 
 <script src="http-aware.js"></script>

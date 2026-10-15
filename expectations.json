@@ -529,6 +529,168 @@
 				"history_added": 1,
 				"location": "http://localhost:8000/index-standalone.html?at=there"
 			}
+		},
+		{
+			"id": "form_reinserted_submits_once_per_click",
+			"description": "A form taken out of the page and put back is wired once: each click sends one request and dispatches one submission, however often the form has been moved",
+			"form": "moved",
+			"steps": [
+				{
+					"move": "reinsert",
+					"expected_request": {
+						"requests": 1,
+						"submissions": 1
+					}
+				},
+				{
+					"move": "reinsert",
+					"expected_request": {
+						"requests": 1,
+						"submissions": 1
+					}
+				}
+			]
+		},
+		{
+			"id": "form_moved_by_a_morph_submits_once_per_click",
+			"description": "A form the library's morph moves with insertBefore is wired once: each click sends one request and dispatches one submission, however often the form has been moved",
+			"form": "moved",
+			"steps": [
+				{
+					"move": "morph",
+					"expected_request": {
+						"requests": 1,
+						"submissions": 1
+					}
+				},
+				{
+					"move": "morph",
+					"expected_request": {
+						"requests": 1,
+						"submissions": 1
+					}
+				}
+			]
+		},
+		{
+			"id": "autosubmit_form_moved_sends_one_request_per_change",
+			"description": "An autosubmit form moved in the page, by reinsertion and then by a morph, sends one request for each change",
+			"form": "moved-auto",
+			"steps": [
+				{
+					"move": "reinsert",
+					"submit": false,
+					"form_state": {
+						"shade": "dark"
+					},
+					"expected_request": {
+						"requests": 1,
+						"submissions": 1,
+						"query_exact": "shade=dark"
+					}
+				},
+				{
+					"move": "morph",
+					"submit": false,
+					"form_state": {
+						"shade": "light"
+					},
+					"expected_request": {
+						"requests": 1,
+						"submissions": 1,
+						"query_exact": "shade=light"
+					}
+				}
+			]
+		},
+		{
+			"id": "oob_marked_outerhtml_replaces_its_element_under_a_retarget",
+			"description": "Under a retarget, an element marked data-swap-oob=\"true\" replaces the element on the page carrying its id, and is not put into the primary content",
+			"form": "oob-retarget",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"section#oob-outer.replaced > p.fresh": 1,
+					"#oob-outer > p.stale": 0,
+					"#oob-primary #oob-outer": 0
+				}
+			}
+		},
+		{
+			"id": "oob_marked_innerhtml_fills_and_keeps_its_element_under_a_retarget",
+			"description": "Under a retarget, an element marked data-swap-oob=\"innerHTML\" fills the element on the page carrying its id, which keeps its own tag and class, and is not put into the primary content",
+			"form": "oob-retarget",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"section#oob-inner.shell > p.fresh": 1,
+					"#oob-inner > p.stale": 0,
+					"aside#oob-inner": 0,
+					"#oob-primary #oob-inner": 0
+				}
+			}
+		},
+		{
+			"id": "oob_marked_with_no_element_on_the_page_is_dropped_under_a_retarget",
+			"description": "Under a retarget, a marked element whose id nothing on the page carries is dropped, not made primary content; the primary content still lands in the retargeted element",
+			"form": "oob-retarget",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"#oob-missing": 0,
+					"#oob-primary > p.fresh": 1,
+					"#oob-primary > p.stale": 0,
+					"#oob-result p": 0
+				}
+			}
+		},
+		{
+			"id": "unmarked_child_under_a_retarget_stays_primary_content",
+			"description": "Under a retarget, an unmarked element whose id is on the page is part of the primary content, as before: it lands in the retargeted element and the page's own element is untouched",
+			"form": "oob-retarget",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"#oob-primary > section#oob-unmarked > p.fresh": 1,
+					"main > section#oob-unmarked > p.stale": 1
+				}
+			}
+		},
+		{
+			"id": "oob_marked_innerhtml_fills_and_keeps_its_element_without_a_retarget",
+			"description": "Without a retarget, an element marked data-swap-oob=\"innerHTML\" fills the element on the page carrying its id and keeps it, rather than replacing it",
+			"form": "oob-plain",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"section#oob-inner.shell > p.fresh": 1,
+					"aside#oob-inner": 0
+				}
+			}
+		},
+		{
+			"id": "oob_marked_with_no_element_on_the_page_is_dropped_without_a_retarget",
+			"description": "Without a retarget, a marked element whose id nothing on the page carries is dropped, not made primary content",
+			"form": "oob-plain",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"#oob-missing": 0,
+					"#oob-primary > p.fresh": 1
+				}
+			}
+		},
+		{
+			"id": "unmarked_child_with_an_id_on_the_page_stays_out_of_band_without_a_retarget",
+			"description": "Without a retarget, an unmarked element whose id is on the page outside the target replaces that element by the id rule, as before",
+			"form": "oob-plain",
+			"form_state": {},
+			"expected_request": {
+				"dom_counts": {
+					"main > section#oob-unmarked > p.fresh": 1,
+					"#oob-primary #oob-unmarked": 0
+				}
+			}
 		}
 	],
 	"header_format_spec": {

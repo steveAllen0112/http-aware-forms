@@ -257,7 +257,16 @@ The match is on id only; any other response goes in as it is. To place an elemen
 
 `morph` is worth reaching for whenever the response contains the form that sent it: an `outerHTML` swap of a live panel destroys focus and any edit the user has begun, and a morph does not.
 
-Elements in the response carrying `hx-swap-oob` or `data-swap` are applied to their own targets by id, so one response can update several places at once.
+**Out-of-band updates.** One response can update several places at once. An element in the response marked `data-swap-oob` (or `hx-swap-oob`, with the [htmx interop](#using-it-alongside-htmx) loaded) goes to the element on the page that carries its id, whatever the primary swap is doing and whether or not the server retargeted it. The marker's value is the swap, as htmx reads it: `innerHTML` fills the element on the page and keeps it, with its own attributes and listeners; any other value (`true`, `outerHTML`) replaces it. `data-swap="morph"` on the element morphs it instead. A marked element whose id nothing on the page carries is dropped, with a console warning, and never lands in the target.
+
+```html
+<!-- primary content, then two out-of-band updates -->
+<p>Saved.</p>
+<span id="cart-count" data-swap-oob="true">3</span>
+<section id="totals" data-swap-oob="innerHTML">…</section>
+```
+
+An unmarked element whose id is already on the page, outside the target, is treated as out of band too — unless the server retargeted the swap (`X-Retarget`), in which case the whole unmarked payload is the primary content, so that a response refreshing a whole container keeps its children. See `docs/decisions/ADR-2026.10.14.marked-out-of-band-is-out-of-band.md`.
 
 **Errors are not swapped.** A response that is not `ok` and is not HTML is surfaced as an `http-error` event and a toast rather than written into the target — swapping a JSON error body as `outerHTML` deletes the very panel it was reporting about.
 
@@ -275,6 +284,8 @@ Elements in the response carrying `hx-swap-oob` or `data-swap` are applied to th
 ```
 
 A button may override the delay for its own submission with `formdebounce`.
+
+Both attributes are read when the form is connected to the page. A form is wired once, however often it is connected: moved about the page — by a `morph` swap, or by a script that reorders rows — it keeps one set of listeners, so one click is one request and one change is one request. When it returns to the page, `autosubmit` and `debounce` are read again, so a change made to them while the form was out of the page takes effect. See `docs/decisions/ADR-2026.10.14.wired-once-per-element.md`.
 
 ## Button Overrides (form* Attributes)
 

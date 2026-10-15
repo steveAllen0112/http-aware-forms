@@ -76,7 +76,7 @@ class RequestValidator(BaseHTTPRequestHandler):
 		self.send_header('Access-Control-Allow-Origin', '*')
 		self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
 		self.send_header('Access-Control-Allow-Headers', '*')
-		self.send_header('Access-Control-Expose-Headers', 'Content-Range, Link, HX-Push-Url')
+		self.send_header('Access-Control-Expose-Headers', 'Content-Range, Link, HX-Push-Url, X-Retarget')
 
 	def do_OPTIONS(self):
 		self.send_response(200)
@@ -84,8 +84,13 @@ class RequestValidator(BaseHTTPRequestHandler):
 		self.end_headers()
 
 	def do_GET(self):
-		if urlparse(self.path).path == '/push':
+		path = urlparse(self.path).path
+		if path == '/push':
 			return self.answer_push()
+		if path == '/ok':
+			return self.answer_ok()
+		if path == '/oob':
+			return self.answer_oob()
 		passed = self.log_request_details()
 
 		self.send_response(206 if passed else 400)
@@ -125,6 +130,37 @@ class RequestValidator(BaseHTTPRequestHandler):
 			self.send_header('HX-Push-Url', address)
 		self.end_headers()
 		self.wfile.write(f'<p>HX-Push-Url: {html.escape(address)}</p>'.encode())
+
+	def answer_ok(self):
+		# /ok is answered 200 whatever it carries, for a case that counts the
+		# requests one click or one change sends. It has no Prefer or Range to check.
+		print(f"\n[OK] GET {self.path}\n")
+
+		self.send_response(200)
+		self.send_cors_headers()
+		self.send_header('Content-Type', 'text/html')
+		self.end_headers()
+		self.wfile.write(f'<p>GET {html.escape(self.path)}</p>'.encode())
+
+	def answer_oob(self):
+		# /oob is answered with one primary element and four others: one marked
+		# out of band to replace its element, one marked to fill its element, one
+		# marked with no element on the page to go to, and one unmarked whose id
+		# the page carries. ?retarget=<selector> adds X-Retarget naming it.
+		retarget = parse_qs(urlparse(self.path).query).get('retarget', [''])[0]
+		print(f"\n[OOB] GET {self.path}\n  X-Retarget: {retarget or '(none)'}\n")
+
+		self.send_response(200)
+		self.send_cors_headers()
+		self.send_header('Content-Type', 'text/html')
+		if retarget:
+			self.send_header('X-Retarget', retarget)
+		self.end_headers()
+		self.wfile.write('''<p class="fresh">primary, new</p>
+<section id="oob-outer" class="replaced" data-swap-oob="true"><p class="fresh">outer, new</p></section>
+<aside id="oob-inner" class="edition" data-swap-oob="innerHTML"><p class="fresh">inner, new</p></aside>
+<section id="oob-missing" data-swap-oob="true"><p class="fresh">nowhere to go</p></section>
+<section id="oob-unmarked"><p class="fresh">unmarked, new</p></section>'''.encode())
 
 	def do_PATCH(self):
 		# A PATCH is answered with the body it carried. The reply is 2xx, so the

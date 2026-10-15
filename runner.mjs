@@ -60,6 +60,8 @@ async function runTests() {
 			const self = 'http://localhost:8000/index-standalone.html?';
 			const handleRequest = (request) => {
 				if (request.url().includes('localhost:9999') || (tc.capture_self && request.url().startsWith(self))) {
+					// Every request is counted; the last one's details are kept.
+					captured.requests = (captured.requests || 0) + 1;
 					captured.method = request.method();
 					captured.url = request.url();
 					captured.headers = request.headers();
@@ -89,8 +91,26 @@ async function runTests() {
 			// loaded page, each with its own form_state, checks and expected_request
 			// — for a case whose point is what an earlier submission left behind.
 			const steps = tc.steps || [tc];
+
+			// A case that counts submissions counts the http-aware-submitted events
+			// its form dispatches: one for every request the form starts, whether or
+			// not the request reaches the network.
+			const countsSubmissions = steps.some(s => s.expected_request?.submissions !== undefined);
+			if (countsSubmissions) {
+				await page.evaluate((id) => {
+					window.__submissions = 0;
+					document.addEventListener('http-aware-submitted', (event) => {
+						if (event.target.id === id) window.__submissions++;
+					});
+				}, form);
+			}
+
 			for (const [index, step] of steps.entries()) {
 				const at = steps.length > 1 ? `Step ${index + 1}: ` : '';
+				// Cleared at the start of the step, so a request sent by the step's
+				// own input (an autosubmit form) is counted with it.
+				captured = {};
+				if (countsSubmissions) await page.evaluate(() => { window.__submissions = 0; });
 
 				// Set form values
 				const fs = step.form_state || {};
@@ -120,6 +140,44 @@ async function runTests() {
 					await page.fill('input[name="q"]', fs.q);
 				}
 
+				// `move` takes the case's form out of the page and back before the
+				// step's own input, as an application moves a form: "reinsert" removes
+				// it and inserts it where it was; "morph" has the library's morph
+				// reconcile the form's parent against a copy in which the form stands
+				// one place earlier, before its previous element sibling, so the morph
+				// moves the live form with insertBefore. (The morph moves a node only
+				// to an earlier place: moved later, the form stays and the others move
+				// round it.) Either way the element is disconnected and connected
+				// again. Focus is cleared first, because the morph leaves a focused
+				// subtree where it is.
+				if (step.move) {
+					const moved = await page.evaluate(([id, how]) => {
+						const el = document.getElementById(id);
+						const parent = el.parentNode;
+						if (how === 'reinsert') {
+							const next = el.nextSibling;
+							el.remove();
+							parent.insertBefore(el, next);
+							return el.isConnected;
+						}
+						if (how === 'morph') {
+							const before = el.previousElementSibling;
+							if (!before) return false;
+							document.activeElement?.blur();
+							const fresh = parent.cloneNode(true);
+							const copy = fresh.querySelector(`#${id}`);
+							fresh.insertBefore(copy, copy.previousElementSibling);
+							customElements.get('http-aware').morphSwap(parent, fresh);
+							return el.isConnected && el.parentNode === parent && el.nextElementSibling === before;
+						}
+						return false;
+					}, [form, step.move]);
+					if (!moved) {
+						errors.push(`${at}The form was not moved by '${step.move}'`);
+						passed = false;
+					}
+				}
+
 				// Any field the block above does not know about: set it generically,
 				// so a new test case can introduce new controls without editing the
 				// runner. The known fields keep their explicit defaults above,
@@ -139,14 +197,28 @@ async function runTests() {
 					await page.setChecked(sel, on);
 				}
 
-				// Submit
-				captured = {};
+				// Submit. A step with `"submit": false` clicks nothing: its own input
+				// is what submits the form (autosubmit).
 				const historyBefore = await page.evaluate(() => history.length);
-				await page.click(`#${form} button[type="submit"]`);
+				if (step.submit !== false) await page.click(`#${form} button[type="submit"]`);
 				await page.waitForTimeout(1000);
 
 				// Validate
 				const expected = step.expected_request;
+
+				// Check requests: how many reached the test server during the step;
+				// and submissions: how many http-aware-submitted events the form sent.
+				if (expected.requests !== undefined && (captured.requests || 0) !== expected.requests) {
+					errors.push(`${at}${captured.requests || 0} request(s) sent, expected ${expected.requests}`);
+					passed = false;
+				}
+				if (expected.submissions !== undefined) {
+					const got = await page.evaluate(() => window.__submissions);
+					if (got !== expected.submissions) {
+						errors.push(`${at}${got} submission(s) dispatched, expected ${expected.submissions}`);
+						passed = false;
+					}
+				}
 
 				// Check headers
 				if (expected.headers) {

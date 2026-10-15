@@ -1,4 +1,4 @@
-// HTTP-Aware Forms v3.3.2 — HTML forms that speak the whole of HTTP.
+// HTTP-Aware Forms v3.4.0 — HTML forms that speak the whole of HTTP.
 // https://github.com/steveAllen0112/http-aware-forms | MIT License | RFC 9110
 
 const COMBINABLE_HEADERS = new Set([
@@ -179,8 +179,19 @@ class HTTPAwareForm extends HTMLFormElement {
 
 	preparedRequest = null;
 
+	// The form's own listeners, made once with the element. A customized built-in's
+	// connectedCallback runs every time the element is connected, and a listener on
+	// the element survives the disconnect, so a listener made inside the callback is
+	// added again on every move: a form moved by a morph's insertBefore, or by a drag
+	// that reorders rows, sent two requests for one click. addEventListener ignores a
+	// listener already registered for the same event, so connecting again with these
+	// same functions adds nothing.
+	// See: docs/decisions/ADR-2026.10.14.wired-once-per-element.md
+	_onNativeSubmit = (event) => this._handleNativeSubmit(event);
+	_onAutoSubmitEdit = (event) => this._autoSubmitEdit(event);
+
 	connectedCallback() {
-		this.addEventListener('submit', this._handleNativeSubmit.bind(this));
+		this.addEventListener('submit', this._onNativeSubmit);
 		this._installAutoSubmit();
 	}
 
@@ -208,41 +219,57 @@ class HTTPAwareForm extends HTMLFormElement {
 	 * Suffixed forms `"300ms"` / `"0.5s"` / `"2s"` also accepted for readability
 	 * in occasional long-running cases, but the platform default is ms — matches
 	 * setTimeout / setInterval / requestAnimationFrame conventions.
+	 *
+	 * Both attributes are read when the form is connected, and again at every
+	 * later connection, and the listeners are brought to match what they say:
+	 * an event no longer named loses its listener, and a named one keeps the one
+	 * it has, since adding the same function again is a no-op. A move therefore
+	 * adds nothing, and an attribute changed while the form was out of the page
+	 * takes effect when it returns. A change made while it is connected waits
+	 * for the next connection, as it always has.
 	 */
 	_installAutoSubmit() {
 		const events = (this.getAttribute('autosubmit') || '').split(/\s+/).filter(Boolean);
 		const raw = this.getAttribute('debounce');
 		const ms = raw ? HTTPAwareForm._parseDuration(raw) : 0;
-		if (!events.length) {
-			if (!(ms > 0)) return;
-			events.push('input', 'change');
+		if (!events.length && ms > 0) events.push('input', 'change');
+
+		for (const name of this._autoSubmitEvents || []) {
+			if (!events.includes(name)) this.removeEventListener(name, this._onAutoSubmitEdit);
 		}
+		this._autoSubmitEvents = events;
+		this._autoSubmitDelay = ms;
+		if (!events.length) return;
 
-		// One timer per element (WeakMap so detached nodes get collected).
-		this._debounceTimers = new WeakMap();
+		// One timer per element (WeakMap so detached nodes get collected). Kept
+		// across connections, so an edit after a move still clears a timer that
+		// was set before it.
+		this._debounceTimers ??= new WeakMap();
 
-		const onEdit = (ev) => {
-			const el = ev.target;
-			if (!el || !el.name) return;
-			if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return;
-			// Skip elements not actually inside this form (event might bubble
-			// from a nested form, though that's malformed HTML).
-			if (el.form !== this) return;
+		for (const name of events) this.addEventListener(name, this._onAutoSubmitEdit);
+	}
 
-			const existing = this._debounceTimers.get(el);
-			if (existing) clearTimeout(existing);
-			if (!(ms > 0)) {
-				this.requestSubmit();
-				return;
-			}
-			const t = setTimeout(() => {
-				this._debounceTimers.delete(el);
-				this.requestSubmit();
-			}, ms);
-			this._debounceTimers.set(el, t);
-		};
+	/** An edit under `autosubmit`: submit now, or when the control's own timer runs out. */
+	_autoSubmitEdit(ev) {
+		const el = ev.target;
+		if (!el || !el.name) return;
+		if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return;
+		// Skip elements not actually inside this form (event might bubble
+		// from a nested form, though that's malformed HTML).
+		if (el.form !== this) return;
 
-		for (const name of events) this.addEventListener(name, onEdit);
+		const ms = this._autoSubmitDelay;
+		const existing = this._debounceTimers.get(el);
+		if (existing) clearTimeout(existing);
+		if (!(ms > 0)) {
+			this.requestSubmit();
+			return;
+		}
+		const t = setTimeout(() => {
+			this._debounceTimers.delete(el);
+			this.requestSubmit();
+		}, ms);
+		this._debounceTimers.set(el, t);
 	}
 
 	static _parseDuration(s) {
@@ -913,7 +940,8 @@ class HTTPAwareForm extends HTMLFormElement {
 		// that target — skip the auto-OOB heuristic, otherwise children
 		// that share an id with existing DOM nodes (the common case for a
 		// full-container refresh) get yanked out and the primary swap ends
-		// up wiping the container.
+		// up wiping the container. An element MARKED out of band is the
+		// exception: see below.
 		const primaryParts = [];
 		const primaryElements = [];
 		// A child whose id already exists INSIDE the target is NOT out-of-band.
@@ -924,13 +952,45 @@ class HTTPAwareForm extends HTMLFormElement {
 		const primaryWipesTarget = swap === 'innerHTML' || swap === 'outerHTML'
 			|| !['beforebegin', 'afterbegin', 'beforeend', 'afterend', 'delete', 'none', 'morph'].includes(swap);
 		const oobTargets = [];
+		// An element that SAYS it is out of band is out of band, under a retarget
+		// as well as without one, and when nothing on the page carries its id it is
+		// dropped, never placed with the primary content: htmx's own rule for
+		// hx-swap-oob. The id heuristic below decides only for unmarked elements.
+		// See: docs/decisions/ADR-2026.10.14.marked-out-of-band-is-out-of-band.md
+		const marked = [];
+		const unmarked = [];
+		const oobSelector = HTTPAwareForm.oobSelector;
+		for (const child of children) (oobSelector && child.matches(oobSelector) ? marked : unmarked).push(child);
+		for (const child of marked) {
+			const existing = child.id ? document.getElementById(child.id) : null;
+			if (!existing) {
+				console.warn('http-aware: no element for out-of-band id', child.id);
+				continue;
+			}
+			// The marker's value is the swap, as htmx reads hx-swap-oob: `innerHTML`
+			// fills the element on the page and keeps it, with its own attributes and
+			// whatever a script has attached to it; any other value (`true`,
+			// `outerHTML`) replaces it.
+			const how = HTTPAwareForm.oobAttributes.map(a => child.getAttribute(a)).find(v => v && v !== 'true') || 'outerHTML';
+			if (child.getAttribute('data-swap') === 'morph') {
+				HTTPAwareForm.morphSwap(existing, child, this._lastSubmittedNames);
+			} else {
+				// Preserve in-flight edits + focus through the OOB swap.
+				const oobState = HTTPAwareForm.captureEditState(existing);
+				if (how === 'innerHTML') existing.innerHTML = child.innerHTML;
+				else existing.outerHTML = child.outerHTML;
+				HTTPAwareForm.restoreEditState(oobState);
+			}
+			const replaced = document.getElementById(child.id);
+			if (replaced) oobTargets.push(replaced);
+		}
 		if (retarget) {
-			for (const child of children) {
+			for (const child of unmarked) {
 				primaryParts.push(child.outerHTML);
 				primaryElements.push(child);
 			}
 		} else {
-			for (const child of children) {
+			for (const child of unmarked) {
 				const existing = child.id ? document.getElementById(child.id) : null;
 				const insideTarget = !!existing && primaryWipesTarget && target.contains(existing);
 				if (existing && child.id !== target.id && !insideTarget) {

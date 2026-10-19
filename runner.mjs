@@ -78,7 +78,11 @@ async function runTests() {
 			await page.waitForLoadState('networkidle');
 			// A case that exercises an optional add-on (http-aware-htmx.js) loads it
 			// onto the page first; the add-on registers its hooks as it loads.
-			if (tc.interop) await page.addScriptTag({ url: `http://localhost:8000/${tc.interop}` });
+			// `interop` is one file or a list, loaded in order (a stand-in for
+			// htmx, fixtures/htmx-stub.js, comes before the add-on).
+			for (const src of [].concat(tc.interop || [])) {
+				await page.addScriptTag({ url: `http://localhost:8000/${src}` });
+			}
 
 			// `form` names the form a case submits (default: the demo form), and
 			// every generic field is looked up inside it, so two forms may use the
@@ -205,9 +209,25 @@ async function runTests() {
 				//   { "press": "<selector>", "key": "<key>" }  press a key in the control,
 				//     as a person does (Tab moves focus on, and the browser fires its own
 				//     change if the value differs from what it was when focus arrived);
+				//   { "fill": "<selector>", "value": "<text>" }  type a value into one
+				//     control, for a form in which two controls share a name;
+				//   { "throw_in": "<method>", "call": "<method>" }  replace the form's
+				//     throw_in method with one that throws, call its `call` method
+				//     directly, record whether the call threw (checked by `threw`),
+				//     and take the replacement away again;
 				//   { "wait": ms }.
 				for (const action of step.actions || []) {
-					if (action.step) {
+					if (action.fill) {
+						await page.fill(action.fill, action.value);
+					} else if (action.throw_in) {
+						await page.evaluate(([id, name, call]) => {
+							const el = document.getElementById(id);
+							el[name] = () => { throw new Error('thrown by the test case'); };
+							window.__threw = false;
+							try { el[call](); } catch (_) { window.__threw = true; }
+							delete el[name];
+						}, [form, action.throw_in, action.call]);
+					} else if (action.step) {
 						await page.$eval(action.step, (el, by) => {
 							el.focus();
 							if (by > 0) el.stepUp(by); else el.stepDown(-by);
@@ -242,6 +262,57 @@ async function runTests() {
 					if (got !== expected.submissions) {
 						errors.push(`${at}${got} submission(s) dispatched, expected ${expected.submissions}`);
 						passed = false;
+					}
+				}
+
+				// Check the method of the last request the step sent.
+				if (expected.method !== undefined && captured.method !== expected.method) {
+					errors.push(`${at}Method is '${captured.method || ''}', expected '${expected.method}'`);
+					passed = false;
+				}
+
+				// Check threw: whether the call a throw_in action made threw.
+				if (expected.threw !== undefined) {
+					const threw = await page.evaluate(() => window.__threw);
+					if (threw !== expected.threw) {
+						errors.push(`${at}The call threw: ${threw}, expected ${expected.threw}`);
+						passed = false;
+					}
+				}
+
+				// Check dom_properties and dom_attributes:
+				// { "<selector>": { "<name>": "<value>" } }, read from the one element
+				// the selector finds, as a DOM property (el[name]) and as an attribute
+				// (el.getAttribute(name)).
+				for (const [kind, read] of [
+					['dom_properties', (el, n) => el[n]],
+					['dom_attributes', (el, n) => el.getAttribute(n)],
+				]) {
+					for (const [sel, wants] of Object.entries(expected[kind] || {})) {
+						for (const [name, want] of Object.entries(wants)) {
+							const got = await page.$eval(sel, read, name).catch(() => undefined);
+							if (got !== want) {
+								errors.push(`${at}${kind} ${sel} ${name}: got '${got}', expected '${want}'`);
+								passed = false;
+							}
+						}
+					}
+				}
+
+				// Check htmx_processed: the id of each element that must have been
+				// handed to htmx.process, as fixtures/htmx-stub.js records them.
+				if (expected.htmx_processed) {
+					const processed = await page.evaluate(() => window.__htmxProcessed);
+					if (!Array.isArray(processed)) {
+						errors.push(`${at}htmx_processed: fixtures/htmx-stub.js is not loaded`);
+						passed = false;
+					} else {
+						for (const id of expected.htmx_processed) {
+							if (!processed.includes(id)) {
+								errors.push(`${at}htmx.process was not given #${id}; it was given: ${JSON.stringify(processed)}`);
+								passed = false;
+							}
+						}
 					}
 				}
 

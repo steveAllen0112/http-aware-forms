@@ -851,6 +851,192 @@
 					}
 				}
 			]
+		},
+		{
+			"id": "namespace_same_name_in_two_fieldsets_sends_two_keys",
+			"description": "Two name-space fieldsets holding controls of the same name send two distinct keys, each under its fieldset's name, and no flat key",
+			"form": "ns-pair",
+			"form_state": {},
+			"expected_request": {
+				"method": "POST",
+				"body_exact": "pricing%5Bcost%5D=100&lease%5Bcost%5D=42",
+				"body_must_not_contain": [
+					"cost=100",
+					"cost=42"
+				]
+			}
+		},
+		{
+			"id": "namespace_unmarked_named_fieldset_stays_flat_beside_a_marked_one",
+			"description": "A fieldset that has a name but is not a name-space fieldset sends its controls under their own names, while a name-space fieldset beside it in the same form still prefixes its own",
+			"form": "ns-guard",
+			"form_state": {},
+			"expected_request": {
+				"body_exact": "cost=100&rate=0.02&service%5Bcost%5D=7",
+				"body_must_not_contain": [
+					"pricing%5B",
+					"lease%5B"
+				]
+			}
+		},
+		{
+			"id": "namespace_nested_fieldsets_compose_outer_to_inner",
+			"description": "Nested name-space fieldsets compose their names from the outermost in, as outer[inner][field], and not by the nearest alone",
+			"form": "ns-nested",
+			"form_state": {},
+			"expected_request": {
+				"body_exact": "scenario%5Blabel%5D=base&scenario%5Blease%5D%5Brate%5D=0.02&scenario%5Blease%5D%5Bresidual%5D%5Bpct%5D=10"
+			}
+		},
+		{
+			"id": "namespace_submitter_keeps_its_own_name",
+			"description": "A submit button inside a name-space fieldset is sent under its own name, since it states the action, while the fieldset's other controls are prefixed",
+			"form": "ns-submitter",
+			"form_state": {},
+			"expected_request": {
+				"body_exact": "sales_rep%5Bpct%5D=10&role=sales_rep",
+				"body_must_not_contain": [
+					"sales_rep%5Brole%5D="
+				]
+			}
+		},
+		{
+			"id": "namespace_header_bound_control_goes_to_its_header",
+			"description": "A request-header control inside a name-space fieldset is sent in its header and not in the body, under its own name or the namespaced one",
+			"form": "ns-header",
+			"form_state": {},
+			"expected_request": {
+				"headers": {
+					"Prefer": "view=compact"
+				},
+				"body_exact": "opts%5Bcost%5D=5",
+				"body_must_not_contain": [
+					"view=",
+					"opts%5Bview%5D="
+				]
+			}
+		},
+		{
+			"id": "namespace_patch_sends_the_namespaced_key_of_the_changed_control",
+			"description": "A dirty-only PATCH sends the changed control under its namespaced name, and leaves out an unchanged control of the same name in another name-space fieldset",
+			"form": "ns-patch",
+			"form_state": {},
+			"actions": [
+				{
+					"fill": "#ns-patch-lease-cost",
+					"value": "43"
+				}
+			],
+			"expected_request": {
+				"method": "PATCH",
+				"body_exact": "lease%5Bcost%5D=43"
+			}
+		},
+		{
+			"id": "namespace_control_names_are_restored_after_collection",
+			"description": "The rename a name-space fieldset makes to its controls lasts only while the body is built: afterwards each control has its own name again, and it has it again when building the body throws part-way",
+			"form": "ns-restore",
+			"steps": [
+				{
+					"expected_request": {
+						"body_exact": "lease%5Brate%5D=0.02",
+						"dom_properties": {
+							"#ns-restore-rate": {
+								"name": "rate"
+							}
+						},
+						"dom_attributes": {
+							"#ns-restore-rate": {
+								"name": "rate"
+							}
+						}
+					}
+				},
+				{
+					"submit": false,
+					"actions": [
+						{
+							"throw_in": "getHeaderBoundFields",
+							"call": "collectFormData"
+						}
+					],
+					"expected_request": {
+						"requests": 0,
+						"threw": true,
+						"dom_properties": {
+							"#ns-restore-rate": {
+								"name": "rate"
+							}
+						},
+						"dom_attributes": {
+							"#ns-restore-rate": {
+								"name": "rate"
+							}
+						}
+					}
+				}
+			]
+		},
+		{
+			"id": "htmx_interop_processes_the_swapped_content",
+			"description": "With http-aware-htmx.js loaded, the target of a swap is handed to htmx.process when its new content carries hx-* markup, and the page is not navigated",
+			"interop": [
+				"fixtures/htmx-stub.js",
+				"http-aware-htmx.js"
+			],
+			"form": "wire-list",
+			"form_state": {},
+			"expected_request": {
+				"htmx_processed": [
+					"wire-rows"
+				],
+				"dom_counts": {
+					"section#wire-rows > p.fresh > a#wire-row-link[hx-get]": 1,
+					"section#wire-rows > p.stale": 0,
+					"form#wire-list": 1
+				}
+			}
+		},
+		{
+			"id": "htmx_interop_processes_a_form_replaced_by_its_own_swap",
+			"description": "With http-aware-htmx.js loaded, a form inside its own target that is replaced by its swap, together with the hx-* markup that comes with the new form, is handed to htmx.process through the target",
+			"interop": [
+				"fixtures/htmx-stub.js",
+				"http-aware-htmx.js"
+			],
+			"form": "wire-self-form",
+			"form_state": {},
+			"expected_request": {
+				"htmx_processed": [
+					"wire-self"
+				],
+				"dom_counts": {
+					"section#wire-self > form#wire-self-form > button#wire-self-hx[hx-get]": 1,
+					"section#wire-self p.stale": 0,
+					"#wire-self-form": 1
+				}
+			}
+		},
+		{
+			"id": "htmx_interop_processes_an_element_placed_out_of_band",
+			"description": "With http-aware-htmx.js loaded, an unmarked element of a response that replaces the page's element of the same id out of band is handed to htmx.process when it carries hx-* markup",
+			"interop": [
+				"fixtures/htmx-stub.js",
+				"http-aware-htmx.js"
+			],
+			"form": "wire-oob",
+			"form_state": {},
+			"expected_request": {
+				"htmx_processed": [
+					"wire-oob-region"
+				],
+				"dom_counts": {
+					"section#wire-oob-primary > span#wire-oob-content": 1,
+					"main > section#wire-oob-region > button#wire-oob-btn[hx-get]": 1,
+					"#wire-oob-region > p.stale": 0,
+					"#wire-oob-primary #wire-oob-region": 0
+				}
+			}
 		}
 	],
 	"header_format_spec": {

@@ -185,6 +185,19 @@ class RequestValidator(BaseHTTPRequestHandler):
 		else:
 			self.wfile.write(f'<p>PATCH {html.escape(self.path)}: {html.escape(body)}</p>'.encode())
 
+	def do_POST(self):
+		# A POST is answered 200 with the body it carried, for a case that reads
+		# the body a form sent. It has no Prefer or Range to check.
+		length = int(self.headers.get('Content-Length') or 0)
+		body = self.rfile.read(length).decode('utf-8', 'replace')
+		print(f"\n[ACCEPTED] POST {self.path}\n  body: {body}\n")
+
+		self.send_response(200)
+		self.send_cors_headers()
+		self.send_header('Content-Type', 'text/html')
+		self.end_headers()
+		self.wfile.write(f'<p>POST {html.escape(self.path)}: {html.escape(body)}</p>'.encode())
+
 if __name__ == '__main__':
 	port = int(sys.argv[1]) if len(sys.argv) > 1 else 9999
 	server = HTTPServer(('localhost', port), RequestValidator)

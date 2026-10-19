@@ -441,6 +441,95 @@
 	      action="http://localhost:9999/oob" target="#oob-primary">
 		<button type="submit">Send, not retargeted</button>
 	</form>
+
+	<h2>Namespaced fieldsets in a request body</h2>
+	<p>
+		HTML groups controls in the page and drops the grouping when the form is submitted: two
+		controls named <code>cost</code> in two fieldsets both send <code>cost=…</code>. A
+		<code>name-space</code> fieldset puts its name on the wire as well, so they send
+		<code>pricing[cost]</code> and <code>lease[cost]</code>. A fieldset that only has a name is
+		left alone. Namespaces nest outer to inner; the submitter keeps its own name; a header-bound
+		control goes to its header; a PATCH carries the namespaced name of what changed; and the
+		controls' own names are put back once the body is built.
+	</p>
+	<form is="http-aware" id="ns-pair" method="post"
+	      action="http://localhost:9999/ok" target="#ns-result">
+		<fieldset is="name-space" name="pricing"><label>Cost <input name="cost" value="100"></label></fieldset>
+		<fieldset is="name-space" name="lease"><label>Cost <input name="cost" value="42"></label></fieldset>
+		<button type="submit">Send</button>
+	</form>
+	<form is="http-aware" id="ns-guard" method="post"
+	      action="http://localhost:9999/ok" target="#ns-result">
+		<fieldset name="pricing"><label>Cost <input name="cost" value="100"></label></fieldset>
+		<fieldset name="lease"><label>Rate <input name="rate" value="0.02"></label></fieldset>
+		<fieldset is="name-space" name="service"><label>Cost <input name="cost" value="7"></label></fieldset>
+		<button type="submit">Send</button>
+	</form>
+	<form is="http-aware" id="ns-nested" method="post"
+	      action="http://localhost:9999/ok" target="#ns-result">
+		<fieldset is="name-space" name="scenario">
+			<label>Label <input name="label" value="base"></label>
+			<fieldset is="name-space" name="lease">
+				<label>Rate <input name="rate" value="0.02"></label>
+				<fieldset is="name-space" name="residual">
+					<label>Percent <input name="pct" value="10"></label>
+				</fieldset>
+			</fieldset>
+		</fieldset>
+		<button type="submit">Send</button>
+	</form>
+	<form is="http-aware" id="ns-submitter" method="post"
+	      action="http://localhost:9999/ok" target="#ns-result">
+		<fieldset is="name-space" name="sales_rep">
+			<label>Percent <input name="pct" value="10"></label>
+			<button type="submit" name="role" value="sales_rep">Save</button>
+		</fieldset>
+	</form>
+	<form is="http-aware" id="ns-header" method="post"
+	      action="http://localhost:9999/ok" target="#ns-result">
+		<fieldset is="name-space" name="opts">
+			<fieldset is="request-header" id="ns-prefer" header="Prefer" value="view={view}">
+				<label>View <input name="view" value="compact"></label>
+			</fieldset>
+			<label>Cost <input name="cost" value="5"></label>
+		</fieldset>
+		<button type="submit">Send</button>
+	</form>
+	<form is="http-aware" id="ns-patch" method="patch"
+	      action="http://localhost:9999/ok" target="#ns-result">
+		<fieldset is="name-space" name="pricing"><label>Cost <input id="ns-patch-pricing-cost" name="cost" value="100"></label></fieldset>
+		<fieldset is="name-space" name="lease"><label>Cost <input id="ns-patch-lease-cost" name="cost" value="42"></label></fieldset>
+		<button type="submit">Save</button>
+	</form>
+	<form is="http-aware" id="ns-restore" method="post"
+	      action="http://localhost:9999/ok" target="#ns-result">
+		<fieldset is="name-space" name="lease"><label>Rate <input id="ns-restore-rate" name="rate" value="0.02"></label></fieldset>
+		<button type="submit">Send</button>
+	</form>
+	<output id="ns-result"></output>
+
+	<h2>Markup a swap brings in</h2>
+	<p>
+		With <code>http-aware-htmx.js</code> loaded on a page that runs htmx, every element a swap
+		fills or places that carries <code>hx-*</code> markup is handed to <code>htmx.process</code>,
+		so the <code>hx-*</code> it brought goes live: the target's new content, a form replaced along
+		with the rest of its own target, and an element placed out of band by its id.
+	</p>
+	<section id="wire-rows"><p class="stale">rows, old</p></section>
+	<form is="http-aware" id="wire-list" method="get" action="fixtures/wire-rows.html" target="#wire-rows@innerHTML">
+		<button type="submit">Load the rows</button>
+	</form>
+	<section id="wire-self">
+		<form is="http-aware" id="wire-self-form" method="get" action="fixtures/wire-self.html" target="#wire-self@innerHTML">
+			<p class="stale">controls, old</p>
+			<button type="submit">Refresh the controls</button>
+		</form>
+	</section>
+	<section id="wire-oob-primary"><p class="stale">primary, old</p></section>
+	<section id="wire-oob-region"><p class="stale">region, old</p></section>
+	<form is="http-aware" id="wire-oob" method="get" action="fixtures/wire-oob.html" target="#wire-oob-primary@innerHTML">
+		<button type="submit">Load, with a region out of band</button>
+	</form>
 </main>
 
 <script src="http-aware.js"></script>

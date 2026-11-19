@@ -40,9 +40,14 @@ class TemplatedFieldset extends HTMLFieldSetElement {
 
 	get values() {
 		const names = new Set(this.inputs.map(el => el.name));
-		return Object.fromEntries(
+		const values = Object.fromEntries(
 			[...new FormData(this.form, this.form._submitter)].filter(([k]) => names.has(k))
 		);
+		// The submitter's pair replaces every pair of its name, here as in
+		// collectFormData — whichever of the two stands later in the form.
+		const submitter = this.form._submitter;
+		if (submitter?.name && names.has(submitter.name)) values[submitter.name] = submitter.value;
+		return values;
 	}
 
 	interpolate(template, values) {
@@ -434,11 +439,16 @@ class HTTPAwareForm extends HTMLFormElement {
 		const renamed = this._applyNamespaces();
 		try {
 			const formData = new FormData(this, this._submitter);
-			// A submit button that shares its `name` with another form control
-			// appears TWICE in the entry list (the control's value + the
-			// submitter's). A single-valued server struct rejects the repeat
-			// ("duplicate field `x`"). Collapse to one entry carrying the
-			// submitter's value (the action intent).
+			// The submitter's pair replaces every pair of its name: one rule, read
+			// here for the query or body and in TemplatedFieldset.values for a
+			// template, and nothing on the page is changed to make it hold. A
+			// submit button that shares its `name` with another control — a pager's
+			// `page` buttons beside its page box — appears TWICE in the entry list
+			// (the control's value + the submitter's), and a single-valued server
+			// struct rejects the repeat ("duplicate field `x`"). FormData's set()
+			// keeps the first entry's place and gives it the submitter's value (the
+			// action intent). An earlier copy also wrote the submitter's value into
+			// the control itself, a visible and lasting change to the page.
 			const sName = this._submitter?.name;
 			if (sName && formData.getAll(sName).length > 1) {
 				formData.set(sName, this._submitter.value);
@@ -1272,15 +1282,6 @@ class HTTPAwareForm extends HTMLFormElement {
 		this._abortController = new AbortController();
 
 		this._submitter = submitter;
-		// Sync same-named control with submitter value (FormData doesn't override, just adds both)
-		if (submitter?.name) {
-			for (const el of this.elements) {
-				if (el.name === submitter.name && el !== submitter && !(el instanceof HTMLButtonElement)) {
-					el.value = submitter.value;
-					break;
-				}
-			}
-		}
 
 		// `formdebounce` on the submitter mirrors the formaction/formmethod
 		// override pattern: a button can locally override the form's

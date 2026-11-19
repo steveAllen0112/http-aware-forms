@@ -368,6 +368,25 @@
 	</form>
 	<output id="unvalidated-result"></output>
 
+	<h2>A submitter that shares a name</h2>
+	<p>
+		A pager's buttons and its page box share the name <code>page</code>. The clicked
+		button's pair replaces every pair of that name — in the query or body, and in a
+		header template — and the box keeps what it shows.
+	</p>
+	<form is="http-aware" id="pager" method="get" action="http://localhost:9999/ok" target="#pager-result">
+		<label>Page <input type="number" id="pager-page" name="page" value="1"></label>
+		<button type="submit" name="page" value="3">Page 3</button>
+	</form>
+	<output id="pager-result"></output>
+	<form is="http-aware" id="pager-header" method="get" action="http://localhost:9999/ok" target="#pager-header-result">
+		<button type="submit" name="page" value="3">Page 3</button>
+		<fieldset is="request-header" header="X-Page" value="{page}">
+			<label>Page <input type="number" id="pager-header-page" name="page" value="1"></label>
+		</fieldset>
+	</form>
+	<output id="pager-header-result"></output>
+
 	<h2>A dirty-only PATCH</h2>
 	<p>
 		A PATCH body carries only what changed. A control the browser leaves out when it is

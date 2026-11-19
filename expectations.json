@@ -1166,6 +1166,38 @@
 					}
 				}
 			]
+		},
+		{
+			"id": "submitter_pair_replaces_a_same_named_pair_and_leaves_the_control_alone",
+			"description": "A clicked button named like another control sends its own value once, in place of the control's, and the control keeps the value it shows",
+			"form": "pager",
+			"form_state": {},
+			"expected_request": {
+				"requests": 1,
+				"query_exact": "page=3",
+				"dom_properties": {
+					"#pager-page": {
+						"value": "1"
+					}
+				}
+			}
+		},
+		{
+			"id": "submitter_value_fills_a_header_template_of_its_name",
+			"description": "A header template drawing on a control named like the clicked button takes the button's value, wherever the button stands, and the control keeps the value it shows",
+			"form": "pager-header",
+			"form_state": {},
+			"expected_request": {
+				"requests": 1,
+				"headers": {
+					"X-Page": "3"
+				},
+				"dom_properties": {
+					"#pager-header-page": {
+						"value": "1"
+					}
+				}
+			}
 		}
 	],
 	"header_format_spec": {

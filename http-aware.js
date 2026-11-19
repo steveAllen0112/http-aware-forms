@@ -968,12 +968,12 @@ class HTTPAwareForm extends HTMLFormElement {
 		// target (e.g. a DELETE on the toolbar form whose target is the dialog).
 		// Mirrors the same guard in navigateWithResponse (the no-target path).
 		if (response.status === 204) return;
-		// Non-OK responses: only text/html bodies may swap (the 401
-		// login-page-as-body is a house auth pattern and must keep working).
-		// Anything else — bad_request JSON, plain-text errors — must NOT
-		// replace the target: swapping a 400 body as outerHTML deleted the
-		// panel it was reporting about (observed 2026-07-16). Surface it
-		// instead: toast + bubbled event.
+		// Non-OK responses: only text/html bodies may swap (a 401 whose body
+		// is the sign-in form must keep working). Anything else — bad_request
+		// JSON, plain-text errors — must NOT replace the target: swapping a 400
+		// body as outerHTML deleted the panel it was reporting about (observed
+		// 2026-07-16). It is reported by a bubbled event instead, and the
+		// library shows nothing: what to show is the page's to decide.
 		if (!response.ok) {
 			const ctype = response.headers.get('content-type') || '';
 			if (!ctype.includes('text/html')) {

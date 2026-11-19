@@ -268,7 +268,7 @@ The match is on id only; any other response goes in as it is. To place an elemen
 
 An unmarked element whose id is already on the page, outside the target, is treated as out of band too — unless the server retargeted the swap (`X-Retarget`), in which case the whole unmarked payload is the primary content, so that a response refreshing a whole container keeps its children. See `docs/decisions/ADR-2026.10.14.marked-out-of-band-is-out-of-band.md`.
 
-**Errors are not swapped.** A response that is not `ok` and is not HTML is surfaced as an `http-error` event and a toast rather than written into the target — swapping a JSON error body as `outerHTML` deletes the very panel it was reporting about.
+**Errors are not swapped.** A response that is not `ok` and is not HTML is not written into the target — swapping a JSON error body as `outerHTML` deletes the very panel it was reporting about. The form dispatches an `http-aware-error` event instead, and shows nothing itself: how an error is shown is the page's to decide (see [Events](#events)). An HTML error body is swapped like any other, so a 401 whose body is a sign-in form appears where the request was aimed.
 
 ## autosubmit and debounce
 
@@ -311,20 +311,21 @@ Submit buttons can override form attributes, just like native forms:
 | `formnovalidate` | Skip validation for this button |
 | `formtarget` | Where to display response (`_self`, `_blank`, etc.) |
 
-## Events and Manual Handling
+## Events
 
-The form dispatches `http-aware-submitted` when a request goes out, and `http-error` when a response comes back that is not `ok` and not HTML. Both bubble.
+The library shows nothing of its own: it reports by events, which bubble, and the page decides what to show.
 
-It also fires a standard `submit` event, so a request can still be taken over entirely — though as of 2.0 this is rarely needed, since the library issues the request and places the response itself:
+| Event | Dispatched on | When | `detail` |
+|-------|---------------|------|----------|
+| `http-aware-submitted` | the form | a request goes out | `{ method, url }` |
+| `http-aware-error` | the form | a response to a request with a target is not `ok` and not HTML | `{ status, message }` |
+| `http-error` | the form | a response to a request with no target is 4xx or 5xx | `{ status, url, body, method }` |
+| `http-error` | the form | the request fails on the network | `{ error }` |
+| `http-aware:swapped` | the document | a response has been placed | `{ target, swapRoot, oobTargets, response }` |
 
-```javascript
-document.querySelector('form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const request = e.target.preparedRequest;  // Full Request object with headers
-  const response = await fetch(request);
-  // Handle response...
-});
-```
+`http-aware-error` is cancelable, so a page that renders the error inline can call `preventDefault()` and stop any fallback it installs elsewhere.
+
+The library dispatches no `submit` event of its own — a synthetic one makes the browser submit the form natively as well — and it always sends the request itself; a request cannot be taken over. While `http-aware-submitted` is being dispatched, the form's `preparedRequest` holds the `Request` that is about to go.
 
 ## Using it alongside htmx
 

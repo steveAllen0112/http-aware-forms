@@ -84,6 +84,17 @@ async function runTests() {
 				await page.addScriptTag({ url: `http://localhost:8000/${src}` });
 			}
 
+			// `base` puts a <base> element, with these attributes, first in the page's
+			// head before the case runs: for a case about what a document's base URL
+			// (href) or default target (target) does to a submission.
+			if (tc.base) {
+				await page.evaluate((attrs) => {
+					const base = document.createElement('base');
+					for (const [name, value] of Object.entries(attrs)) base.setAttribute(name, value);
+					document.head.prepend(base);
+				}, tc.base);
+			}
+
 			// `form` names the form a case submits (default: the demo form), and
 			// every generic field is looked up inside it, so two forms may use the
 			// same control name without a case reaching into the wrong one.
@@ -330,11 +341,20 @@ async function runTests() {
 				// Parse the captured URL
 				const actualUrl = captured.url || '';
 				let queryString = '';
+				let pathname = '';
 				try {
 					const parsed = new URL(actualUrl);
 					queryString = parsed.search.slice(1); // Remove leading ?
+					pathname = parsed.pathname;
 				} catch (e) {
 					// URL parsing failed
+				}
+
+				// Check path_exact: the path of the last request, for a case about
+				// where an action resolves.
+				if (expected.path_exact !== undefined && pathname !== expected.path_exact) {
+					errors.push(`${at}Path is '${pathname}', expected '${expected.path_exact}'`);
+					passed = false;
 				}
 
 				// Check dom_counts: { "<selector>": <count> } after the swap — for a case whose

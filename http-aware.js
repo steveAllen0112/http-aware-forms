@@ -884,7 +884,12 @@ class HTTPAwareForm extends HTMLFormElement {
 		// equals the current page." getAttribute returns null when unset and
 		// the relative URL otherwise; new URL(...) below resolves it.
 		const action = this._submitter?.getAttribute('formaction') || this.getAttribute('action') || '';
-		const url = new URL(action || location.href, location.origin);
+		// As the form submission algorithm has it: an empty action is "the URL of the
+		// form document", and the action is parsed relative to the document — against
+		// its base URL, which is the page's own address unless <base href> sets another.
+		// Resolved against the origin instead, `?page=2` lost the page's path and
+		// `items/5` its directory.
+		const url = new URL(action || document.URL, document.baseURI);
 		let body = null;
 
 		if (['GET', 'HEAD', 'DELETE'].includes(method)) {

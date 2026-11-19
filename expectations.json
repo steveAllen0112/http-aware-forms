@@ -1037,6 +1037,31 @@
 					"#wire-oob-primary #wire-oob-region": 0
 				}
 			}
+		},
+		{
+			"id": "relative_query_action_keeps_the_page_path",
+			"description": "An action that is a query alone resolves against the page's own address, as a native form's does: the request goes to this page's path with that query, not to the site root",
+			"form": "rel-query",
+			"capture_self": true,
+			"form_state": {},
+			"expected_request": {
+				"requests": 1,
+				"path_exact": "/index-standalone.html",
+				"query_exact": "via=query"
+			}
+		},
+		{
+			"id": "relative_path_action_resolves_against_the_base_url",
+			"description": "A relative path in the action resolves against the document's base URL, which a <base href> sets, as a native form's does",
+			"form": "rel-path",
+			"base": {
+				"href": "http://localhost:9999/based/"
+			},
+			"form_state": {},
+			"expected_request": {
+				"requests": 1,
+				"path_exact": "/based/echo"
+			}
 		}
 	],
 	"header_format_spec": {

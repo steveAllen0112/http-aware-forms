@@ -315,6 +315,20 @@
 	</form>
 	<output form="self" id="self-result"></output>
 
+	<h2>A relative action</h2>
+	<p>
+		A relative action resolves as a native form's does: against the document's base
+		URL, which is the page's own address unless a <code>&lt;base href&gt;</code> says
+		otherwise. A query alone keeps the page's path; a path keeps its directory.
+	</p>
+	<form is="http-aware" id="rel-query" method="get" action="?via=query" target="#rel-result">
+		<button type="submit">Send to ?via=query</button>
+	</form>
+	<form is="http-aware" id="rel-path" method="get" action="echo" target="#rel-result">
+		<button type="submit">Send to echo</button>
+	</form>
+	<output id="rel-result"></output>
+
 	<h2>A dirty-only PATCH</h2>
 	<p>
 		A PATCH body carries only what changed. A control the browser leaves out when it is

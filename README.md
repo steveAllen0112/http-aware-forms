@@ -321,7 +321,7 @@ The library shows nothing of its own: it reports by events, which bubble, and th
 | `http-aware-error` | the form | a response to a request with a target is not `ok` and not HTML | `{ status, message }` |
 | `http-error` | the form | a response to a request with no target is 4xx or 5xx | `{ status, url, body, method }` |
 | `http-error` | the form | the request fails on the network | `{ error }` |
-| `http-aware:swapped` | the document | a response has been placed | `{ target, swapRoot, oobTargets, response }` |
+| `http-aware:swapped` | the document | a response to a request with a target has been placed (not after a 204, nor after a response written into a window) | `{ target, swapRoot, oobTargets, response }` |
 
 `http-aware-error` is cancelable, so a page that renders the error inline can call `preventDefault()` and stop any fallback it installs elsewhere.
 

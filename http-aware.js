@@ -1231,17 +1231,17 @@ class HTTPAwareForm extends HTMLFormElement {
 		console.error('http-aware error:', error);
 	}
 
+	/**
+	 * The platform's submit(): the form is sent with no submitter and without
+	 * validation. Overridden because overriding it is the one way to catch a
+	 * script's call — submit() fires no event — so that the call still speaks
+	 * the form's method, headers and target instead of making a native GET or
+	 * POST navigation. It takes the same path as requestSubmit, so it aborts
+	 * what is in flight and records what it sends like any other submission;
+	 * a path of its own once reused the submitter an earlier click had left.
+	 */
 	submit() {
-		const request = this.buildRequest();
-		const sent = this._sent;
-		const t = this.effectiveTarget;
-		const nav = this.navigable;
-		fetch(request)
-			.then(res => {
-				if (res.ok) HTTPAwareForm._promoteDefaults(sent);
-				return t ? this.swapResponse(res) : this.navigateWithResponse(res, request.method, nav);
-			})
-			.catch(err => this.handleError(err));
+		this._submitWith(null, false);
 	}
 
 	/**
@@ -1262,6 +1262,11 @@ class HTTPAwareForm extends HTMLFormElement {
 	}
 
 	requestSubmit(submitter = null) {
+		this._submitWith(submitter, true);
+	}
+
+	/** One submission, by requestSubmit (validating) or submit (not). */
+	_submitWith(submitter, validate) {
 		// Abort any in-flight request from this form
 		if (this._abortController) this._abortController.abort();
 		this._abortController = new AbortController();
@@ -1291,7 +1296,7 @@ class HTTPAwareForm extends HTMLFormElement {
 			}
 		}
 
-		const shouldValidate = !(this.noValidate || submitter?.formNoValidate);
+		const shouldValidate = validate && !(this.noValidate || submitter?.formNoValidate);
 		if (shouldValidate && !this.checkValidity()) { this.reportValidity(); return; }
 
 		this.preparedRequest = this.buildRequest();

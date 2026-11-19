@@ -226,10 +226,14 @@ async function runTests() {
 				//     throw_in method with one that throws, call its `call` method
 				//     directly, record whether the call threw (checked by `threw`),
 				//     and take the replacement away again;
+				//   { "invoke": "<method>" }  call one of the form's own methods from
+				//     script with no arguments, as an application does (submit, flush);
 				//   { "wait": ms }.
 				for (const action of step.actions || []) {
 					if (action.fill) {
 						await page.fill(action.fill, action.value);
+					} else if (action.invoke) {
+						await page.$eval(`#${form}`, (el, name) => { el[name](); }, action.invoke);
 					} else if (action.throw_in) {
 						await page.evaluate(([id, name, call]) => {
 							const el = document.getElementById(id);

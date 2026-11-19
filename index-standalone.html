@@ -352,6 +352,22 @@
 	</form>
 	<output id="kw-base-result"></output>
 
+	<h2>Submitting from script</h2>
+	<p>
+		<code>form.submit()</code> sends the form as the platform's <code>submit()</code>
+		does — with no submitter and without validation — through the same path as a click,
+		so a button clicked before it lends it nothing.
+	</p>
+	<form is="http-aware" id="resubmit" method="get" action="http://localhost:9999/ok?via=form" target="#resubmit-result">
+		<button type="submit" formaction="http://localhost:9999/ok?via=button" name="b" value="1">Send by the button's address</button>
+	</form>
+	<output id="resubmit-result"></output>
+	<form is="http-aware" id="unvalidated" method="get" action="http://localhost:9999/ok" target="#unvalidated-result">
+		<label>Needed <input type="text" name="need" required></label>
+		<button type="submit">Send</button>
+	</form>
+	<output id="unvalidated-result"></output>
+
 	<h2>A dirty-only PATCH</h2>
 	<p>
 		A PATCH body carries only what changed. A control the browser leaves out when it is

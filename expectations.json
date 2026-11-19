@@ -1113,6 +1113,59 @@
 					"#kw-base-result > p": 1
 				}
 			}
+		},
+		{
+			"id": "submit_from_script_takes_nothing_from_an_earlier_click",
+			"description": "form.submit() after a click sends with no submitter: the form's own action, not the clicked button's formaction and pair; and it is a submission like any other",
+			"form": "resubmit",
+			"steps": [
+				{
+					"form_state": {},
+					"expected_request": {
+						"requests": 1,
+						"query_exact": "via=button&b=1"
+					}
+				},
+				{
+					"form_state": {},
+					"submit": false,
+					"actions": [
+						{
+							"invoke": "submit"
+						}
+					],
+					"expected_request": {
+						"requests": 1,
+						"submissions": 1,
+						"query_exact": "via=form"
+					}
+				}
+			]
+		},
+		{
+			"id": "submit_from_script_does_not_validate",
+			"description": "A click on a form with an empty required field sends nothing; form.submit() sends it, as the platform's submit() skips validation",
+			"form": "unvalidated",
+			"steps": [
+				{
+					"form_state": {},
+					"expected_request": {
+						"requests": 0
+					}
+				},
+				{
+					"form_state": {},
+					"submit": false,
+					"actions": [
+						{
+							"invoke": "submit"
+						}
+					],
+					"expected_request": {
+						"requests": 1
+					}
+				}
+			]
 		}
 	],
 	"header_format_spec": {

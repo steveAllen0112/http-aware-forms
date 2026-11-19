@@ -326,10 +326,10 @@ class HTTPAwareForm extends HTMLFormElement {
 		// native form submission for the non-http-aware path.
 		event.preventDefault();
 		event.stopPropagation();
-		// Only kick off OUR submission flow when it's a native submit — when
-		// our own requestSubmit dispatched the event, the fetch is already in
-		// flight and recursing would loop.
-		if (!event._httpAware) { this.requestSubmit(event.submitter); }
+		// Every submit event this listener sees is the browser's own: the library
+		// dispatches none (requestSubmit, below, says why), so there is nothing of
+		// its own to tell apart from a native one.
+		this.requestSubmit(event.submitter);
 	}
 
 	getHeaderBoundFields() {
@@ -1082,9 +1082,7 @@ class HTTPAwareForm extends HTMLFormElement {
 		// existing content, and delete/none replace nothing).
 		// morph reconciles in place — nodes survive, so there is nothing to
 		// capture/restore (that dance exists to survive teardown).
-		const primaryState = (swap === 'innerHTML' || swap === 'outerHTML' || !['beforebegin', 'afterbegin', 'beforeend', 'afterend', 'delete', 'none', 'morph'].includes(swap))
-			? HTTPAwareForm.captureEditState(target)
-			: null;
+		const primaryState = primaryWipesTarget ? HTTPAwareForm.captureEditState(target) : null;
 		switch (swap) {
 			case 'innerHTML': target.innerHTML = primaryHtml; break;
 			case 'outerHTML': target.outerHTML = primaryHtml; break;

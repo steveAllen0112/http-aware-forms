@@ -81,8 +81,8 @@ customElements.define('request-header', RequestHeader, { extends: 'fieldset' });
  * `k=contains.` — and a disabled fieldset submits nothing, as a disabled
  * control does. Several fieldsets may share a name: each is its own pair.
  *
- * It goes wherever the form's data goes — the query for GET, HEAD and DELETE,
- * the body otherwise. Its name is namespaced like a control's, it owns that key
+ * It goes wherever the form's data goes — the query for GET and HEAD, the
+ * body for POST, PUT and PATCH, and nowhere for DELETE, which sends none. Its name is namespaced like a control's, it owns that key
  * in the action-query merge, and its pair follows the form's other pairs.
  */
 class QueryParam extends TemplatedFieldset {
@@ -930,7 +930,17 @@ class HTTPAwareForm extends HTMLFormElement {
 		const url = new URL(action || document.URL, document.baseURI);
 		let body = null;
 
-		if (['GET', 'HEAD', 'DELETE'].includes(method)) {
+		if (method === 'DELETE') {
+			// A DELETE carries nothing of the form's: no pair on the query, no body.
+			// Its target is the whole URI, query included (RFC 3986 §3.4), so a pair
+			// added there would name another resource; and content in a DELETE "has
+			// no generally defined semantics, cannot alter the meaning or target of
+			// the request" (RFC 9110 §9.3.5). The address goes as resolved above —
+			// an explicit action's own query kept as written — and the form's
+			// request headers still go: If-Match is the ordinary conditional delete.
+			// See docs/decisions/ADR-2026.11.19.delete-sends-no-form-data.md
+			this._lastSubmittedNames = new Set();
+		} else if (['GET', 'HEAD'].includes(method)) {
 			const pairs = new URLSearchParams([...formData].map(([k, v]) => [k, v instanceof File ? v.name : v]));
 			// An EXPLICIT action is a URL the author wrote, query and all, so the
 			// form is merged into it rather than written over it. An empty or

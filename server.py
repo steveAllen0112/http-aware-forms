@@ -185,6 +185,17 @@ class RequestValidator(BaseHTTPRequestHandler):
 		else:
 			self.wfile.write(f'<p>PATCH {html.escape(self.path)}: {html.escape(body)}</p>'.encode())
 
+	def do_DELETE(self):
+		# A DELETE is answered 204, as RFC 9110 §9.3.5 has an enacted deletion with
+		# nothing further to say answered. Whatever body it carried is logged, so a
+		# run shows that it carried none.
+		length = int(self.headers.get('Content-Length') or 0)
+		body = self.rfile.read(length).decode('utf-8', 'replace')
+		print(f"\n[DELETED] DELETE {self.path}\n  body: {body}\n")
+		self.send_response(204)
+		self.send_cors_headers()
+		self.end_headers()
+
 	def do_POST(self):
 		# A POST is answered 200 with the body it carried, for a case that reads
 		# the body a form sent. It has no Prefer or Range to check.

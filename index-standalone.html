@@ -387,6 +387,25 @@
 	</form>
 	<output id="pager-header-result"></output>
 
+	<h2>DELETE</h2>
+	<p>
+		A DELETE goes to the address as written, query and all, and carries nothing of the
+		form's: no pair on the query and no body. Its headers still go — an
+		<code>If-Match</code> makes it conditional.
+	</p>
+	<form is="http-aware" id="del" method="delete" action="http://localhost:9999/items/42?force=1" target="#del-result">
+		<fieldset is="request-header" header="If-Match" value="{etag}">
+			<input type="hidden" name="etag" value="&quot;v7&quot;">
+		</fieldset>
+		<label>Note <input type="text" name="note" value="x"></label>
+		<button type="submit" name="b" value="1">Delete item 42</button>
+	</form>
+	<output id="del-result"></output>
+	<form is="http-aware" id="del-button" method="get" action="http://localhost:9999/items" target="#del-result">
+		<label>Note <input type="text" name="note" value="x"></label>
+		<button type="submit" formmethod="delete" formaction="http://localhost:9999/items/7">Delete item 7</button>
+	</form>
+
 	<h2>A dirty-only PATCH</h2>
 	<p>
 		A PATCH body carries only what changed. A control the browser leaves out when it is

@@ -1198,6 +1198,35 @@
 					}
 				}
 			}
+		},
+		{
+			"id": "delete_sends_no_form_data",
+			"description": "A DELETE goes to its action as written, query and all, with no pair of the form's on the query and no body; the form's request headers still go",
+			"form": "del",
+			"form_state": {},
+			"expected_request": {
+				"requests": 1,
+				"method": "DELETE",
+				"path_exact": "/items/42",
+				"query_exact": "force=1",
+				"body_exact": "",
+				"headers": {
+					"If-Match": "\"v7\""
+				}
+			}
+		},
+		{
+			"id": "delete_by_formmethod_sends_no_form_data",
+			"description": "A button's formmethod=\"delete\" on a GET form sends a bare DELETE to its formaction: none of the form's fields go on the query",
+			"form": "del-button",
+			"form_state": {},
+			"expected_request": {
+				"requests": 1,
+				"method": "DELETE",
+				"path_exact": "/items/7",
+				"query_exact": "",
+				"body_exact": ""
+			}
 		}
 	],
 	"header_format_spec": {

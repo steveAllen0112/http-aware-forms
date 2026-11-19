@@ -256,11 +256,22 @@ async function runTests() {
 				// Submit. A step with `"submit": false` clicks nothing: its own input
 				// is what submits the form (autosubmit).
 				const historyBefore = await page.evaluate(() => history.length);
+				const windowsBefore = new Set(page.context().pages());
 				if (step.submit !== false) await page.click(`#${form} button[type="submit"]`);
 				await page.waitForTimeout(1000);
 
 				// Validate
 				const expected = step.expected_request;
+
+				// Check windows_opened: how many windows the step opened (a `_blank`
+				// target). Every window it opened is closed again, so the next step
+				// and the next case start from the one tab.
+				const opened = page.context().pages().filter(p => !windowsBefore.has(p));
+				if (expected.windows_opened !== undefined && opened.length !== expected.windows_opened) {
+					errors.push(`${at}${opened.length} window(s) opened, expected ${expected.windows_opened}`);
+					passed = false;
+				}
+				for (const p of opened) await p.close();
 
 				// Check requests: how many reached the test server during the step;
 				// and submissions: how many http-aware-submitted events the form sent.

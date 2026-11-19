@@ -329,6 +329,29 @@
 	</form>
 	<output id="rel-result"></output>
 
+	<h2>Target keywords</h2>
+	<p>
+		<code>_self</code>, <code>_blank</code>, <code>_parent</code> and <code>_top</code>
+		name a window, in any case, as they do for a native form; any other target is a
+		selector. With no target of its own a form takes the document's
+		<code>&lt;base target&gt;</code>.
+	</p>
+	<form is="http-aware" id="kw-self" method="get" action="index-standalone.html" target="_self">
+		<label>At <input type="text" name="at"></label>
+		<button type="submit">Send to _self</button>
+	</form>
+	<form is="http-aware" id="kw-top" method="get" action="index-standalone.html" target="_TOP">
+		<label>At <input type="text" name="at"></label>
+		<button type="submit">Send to _TOP</button>
+	</form>
+	<form is="http-aware" id="kw-blank" method="get" action="http://localhost:9999/ok" target="_blank">
+		<button type="submit">Send to _blank</button>
+	</form>
+	<form is="http-aware" id="kw-base" method="get" action="http://localhost:9999/ok">
+		<button type="submit">Send to the base target</button>
+	</form>
+	<output id="kw-base-result"></output>
+
 	<h2>A dirty-only PATCH</h2>
 	<p>
 		A PATCH body carries only what changed. A control the browser leaves out when it is

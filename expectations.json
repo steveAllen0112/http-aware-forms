@@ -1062,6 +1062,57 @@
 				"requests": 1,
 				"path_exact": "/based/echo"
 			}
+		},
+		{
+			"id": "self_keyword_target_writes_the_reply_into_the_window",
+			"description": "target=\"_self\" is the keyword, not a selector: the HTML reply is written into this window and its address goes into the history, as with no target",
+			"page_query": "?at=here",
+			"form": "kw-self",
+			"form_state": {
+				"at": "there"
+			},
+			"expected_request": {
+				"history_added": 1,
+				"location": "http://localhost:8000/index-standalone.html?at=there"
+			}
+		},
+		{
+			"id": "a_target_keyword_is_matched_in_any_case",
+			"description": "target=\"_TOP\" is the keyword _top, which in a page that is not inside a frame is this window",
+			"page_query": "?at=here",
+			"form": "kw-top",
+			"form_state": {
+				"at": "there"
+			},
+			"expected_request": {
+				"history_added": 1,
+				"location": "http://localhost:8000/index-standalone.html?at=there"
+			}
+		},
+		{
+			"id": "blank_keyword_target_opens_a_window",
+			"description": "target=\"_blank\" opens a new window for the reply, and nothing is looked up as a selector",
+			"form": "kw-blank",
+			"form_state": {},
+			"expected_request": {
+				"requests": 1,
+				"windows_opened": 1
+			}
+		},
+		{
+			"id": "base_target_is_the_default_target",
+			"description": "A form with no target of its own takes the document's <base target>, as a native form does",
+			"form": "kw-base",
+			"base": {
+				"target": "#kw-base-result"
+			},
+			"form_state": {},
+			"expected_request": {
+				"requests": 1,
+				"dom_counts": {
+					"#kw-base-result > p": 1
+				}
+			}
 		}
 	],
 	"header_format_spec": {

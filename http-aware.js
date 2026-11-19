@@ -863,14 +863,42 @@ class HTTPAwareForm extends HTMLFormElement {
 		return { selector: raw, swap: 'innerHTML' };
 	}
 
-	/** Effective target — submitter's formtarget overrides form's target.
+	/**
+	 * The four keywords by which HTML names a window rather than an element
+	 * (HTML, "valid navigable target name or keyword"). They are matched
+	 * without regard to case, and HTML reserves every name that begins with
+	 * `_` for them.
+	 */
+	static navigableKeywords = new Set(['_self', '_blank', '_parent', '_top']);
+
+	/** The target as written — the submitter's formtarget, else the form's
+	 *  target, else the document's <base target>, as HTML's "get an element's
+	 *  target" orders them — or '' when there is none.
 	 *  Raw getAttribute (not the formTarget IDL property) for uniformity with
 	 *  the formmethod / formaction reads below — see notes there. The IDL
 	 *  property would be safe here, but mixing styles invites the reader to
 	 *  "clean up" the other two into property reads and reintroduce their
 	 *  spec gotchas. Keep the pattern uniform. */
+	get _targetValue() {
+		return (this._submitter?.getAttribute('formtarget') || this.getAttribute('target')
+			|| document.querySelector('base[target]')?.getAttribute('target') || '').trim();
+	}
+
+	/** Effective target — the element the response is swapped into, as
+	 *  { selector, swap }, or null when the response goes to a window: no
+	 *  target at all, or one of the keywords. A keyword is read before
+	 *  anything is read as a selector; `_blank` was once taken for a CSS
+	 *  type selector, matched nothing, and the reply was dropped. */
 	get effectiveTarget() {
-		return this.parseTarget(this._submitter?.getAttribute('formtarget') || this.getAttribute('target'));
+		const raw = this._targetValue;
+		return HTTPAwareForm.navigableKeywords.has(raw.toLowerCase()) ? null : this.parseTarget(raw);
+	}
+
+	/** The window a response with no element target goes to: the keyword the
+	 *  target names, lower-cased, or `_self` when there is no target. */
+	get navigable() {
+		const raw = this._targetValue.toLowerCase();
+		return HTTPAwareForm.navigableKeywords.has(raw) ? raw : '_self';
 	}
 
 	buildRequest() {
@@ -1163,23 +1191,39 @@ class HTTPAwareForm extends HTMLFormElement {
 			return;
 		}
 
-		if (!response.redirected && (response.headers.get('content-type') || '').includes('text/html')) {
-			const w = (target === '_blank') ? window.open('', '_blank').document : document;
+		// The window the reply goes to: `target` is one of the four keywords
+		// (`navigable`). `_parent` and `_top` are this window when the page is not
+		// inside a frame; `_blank` is a new window, opened only once there is
+		// something to put in it.
+		const win = target === '_parent' ? window.parent : target === '_top' ? window.top : window;
 
-			w.open().write(await response.text()); w.close();
+		if (!response.redirected && (response.headers.get('content-type') || '').includes('text/html')) {
+			const html = await response.text();
+			if (target === '_blank') {
+				const doc = window.open('', '_blank')?.document;
+				if (doc) { doc.open().write(html); doc.close(); }
+				return;
+			}
+			// A frame of another origin cannot be written into, only sent to an
+			// address, so it is sent to the reply's.
+			let doc = null;
+			try { doc = win.document; } catch { /* another origin */ }
+			if (!doc) { win.location.href = response.url; return; }
+			// Read before the write: a document opened from another window's
+			// script takes that script's address until the history says otherwise.
+			const current = win.location.pathname + win.location.search;
+			doc.open().write(html); doc.close();
 			// The window now holds the reply, so its address goes in the history.
 			// A push of the address already current adds a second entry for the
 			// same page, and Back then stays on it, so that write replaces the
 			// entry instead. Path and query decide; the fragment is not compared.
 			// The check is local, not a global function: this is a classic
 			// script, and a page may declare an isCurrentHistoryEntry of its own.
-			if (target !== '_blank') {
-				const u = new URL(response.url, location.href);
-				if (u.pathname + u.search === location.pathname + location.search) history.replaceState(null, '', response.url);
-				else history.pushState(null, '', response.url);
-			}
+			const u = new URL(response.url, win.location.href);
+			if (u.pathname + u.search === current) win.history.replaceState(null, '', response.url);
+			else win.history.pushState(null, '', response.url);
 		} else if (target === '_blank') window.open(response.url);
-		else location.href = response.url;
+		else win.location.href = response.url;
 	}
 
 	handleError(error) {
@@ -1191,10 +1235,11 @@ class HTTPAwareForm extends HTMLFormElement {
 		const request = this.buildRequest();
 		const sent = this._sent;
 		const t = this.effectiveTarget;
+		const nav = this.navigable;
 		fetch(request)
 			.then(res => {
 				if (res.ok) HTTPAwareForm._promoteDefaults(sent);
-				return t ? this.swapResponse(res) : this.navigateWithResponse(res, request.method, this.target || '_self');
+				return t ? this.swapResponse(res) : this.navigateWithResponse(res, request.method, nav);
 			})
 			.catch(err => this.handleError(err));
 	}
@@ -1253,6 +1298,7 @@ class HTTPAwareForm extends HTMLFormElement {
 		// Held with the request it describes: the next submission replaces _sent.
 		const sent = this._sent;
 		const t = this.effectiveTarget;
+		const nav = this.navigable;
 
 		// We intentionally do NOT dispatch a synthetic submit event here.
 		// In Chromium, the default action of a submit event (native form
@@ -1282,7 +1328,7 @@ class HTTPAwareForm extends HTMLFormElement {
 				// A 2xx means the server took what was sent — before the swap.
 				if (res.ok) HTTPAwareForm._promoteDefaults(sent);
 				answered();
-				return t ? this.swapResponse(res) : this.navigateWithResponse(res, method, this.target || '_self');
+				return t ? this.swapResponse(res) : this.navigateWithResponse(res, method, nav);
 			})
 			.catch(err => {
 				answered();
